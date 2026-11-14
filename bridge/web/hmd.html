@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+<title>HMD View</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none;
+               user-select: none; -webkit-user-select: none; }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  #hud { position: fixed; left: 8px; top: 8px; color: #7ee787; font: 12px/1.4 monospace;
+         background: rgba(0,0,0,.55); padding: 6px 8px; border-radius: 6px; white-space: pre; z-index: 2; }
+  [hidden] { display: none !important; }
+  #start { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+           justify-content: center; gap: 10px; color: #fff; font: 18px system-ui, sans-serif;
+           background: #000; z-index: 3; text-align: center; padding: 16px; }
+  #start b { font-size: 26px; }
+  #start small { color: #8b949e; }
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<div id="hud">starting…</div>
+<div id="start">
+  <b>Starting…</b>
+  <span>The laptop taps this for you over USB (or tap / press Enter in the bridge window)</span>
+  <small>Double-tap = recenter view, single tap = show/hide stats</small>
+</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+const canvas = document.getElementById("screen");
+const gl = canvas.getContext("webgl2", {alpha: false, antialias: false, desynchronized: true});
+const hud = document.getElementById("hud");
+const stats = {poseHz: 0, poseN: 0, poseSrc: "-", fps: 0, frames: 0, decodeQ: 0, dropped: 0,
+               video: "connecting", pose: "connecting", w: 0, h: 0};
+const wsBase = `ws://${location.host}`;
+
+function resize() {
+  canvas.width = Math.round(innerWidth * devicePixelRatio);
+  canvas.height = Math.round(innerHeight * devicePixelRatio);
+}
+addEventListener("resize", resize); resize();
+
+// ── Renderer: lens correction + overscan + timewarp (WebGL) ──────────────────
+// The laptop sends each eye rendered WIDER than the lens shows (overscan) and undistorted.
+// Here every screen pixel is traced through the lens model to a view direction, rotated by
+// how far the head has moved since that frame was rendered (timewarp), and looked up in the
+// wide image. Result: the picture always runs past the screen edges, and head movement
+// shows up at the phone's own sensor rate instead of waiting for the next video frame.
+// Settings come from Godot (hmd_stereo.gd keys) through the bridge.
+const lens = {stereo: true, lens_on_phone: true, distortion: true, k1: 0.22, k2: 0.10,
+              lens_offset: 0.08, zoom: 1.0, eye_fov: 90, overscan: 1.4, render_fov: null,
+              timewarp: true, latency_ms: 90, vignette: 0.06, chroma: 0};
+
+const VS = `#version 300 es
+in vec2 p; out vec2 uv;
+void main() { uv = vec2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5); gl_Position = vec4(p, 0.0, 1.0); }`;
+const FS = `#version 300 es
+precision highp float;
+in vec2 uv; out vec4 o;
+uniform sampler2D tex;
+uniform bool passthrough, distort, stereo;
+uniform float k1, k2, lensOffset, zoom, eyeAspect, tanD, tanR, vignette, chroma;
+uniform mat3 delta;
+
+// eye-space offset from the lens centre (units of eye height) -> texture coords in the wide render
+vec2 lookup(vec2 d, float sc) {
+  d *= sc;
+  float r2 = dot(d, d);
+  if (distort) d *= 1.0 + k1 * r2 + k2 * r2 * r2;
+  d /= zoom;
+  vec3 ray = normalize(vec3(d.x * 2.0 * tanD, -d.y * 2.0 * tanD, -1.0));
+  ray = delta * ray;                                  // timewarp: current head -> rendered head
+  if (ray.z > -0.01) return vec2(0.5);
+  vec2 t = ray.xy / -ray.z;
+  return vec2(0.5 + t.x / (2.0 * tanR * eyeAspect), 0.5 - t.y / (2.0 * tanR));
+}
+vec3 eyeColor(vec2 s, bool right) {
+  s = clamp(s, vec2(0.001), vec2(0.999));            // never a hard border: hold the edge colour
+  if (stereo) s.x = (s.x + (right ? 1.0 : 0.0)) * 0.5;
+  return texture(tex, s).rgb;
+}
+void main() {
+  if (passthrough) { o = texture(tex, uv); return; }
+  bool right = stereo && uv.x >= 0.5;
+  vec2 e = stereo ? vec2(fract(uv.x * 2.0), uv.y) : uv;
+  vec2 c = vec2(0.5 + (stereo ? (right ? -lensOffset : lensOffset) : 0.0), 0.5);
+  vec2 d = e - c; d.x *= eyeAspect;
+  vec3 col;
+  if (chroma > 0.0) {
+    col = vec3(eyeColor(lookup(d, 1.0 - chroma), right).r,
+               eyeColor(lookup(d, 1.0), right).g,
+               eyeColor(lookup(d, 1.0 + chroma), right).b);
+  } else {
+    col = eyeColor(lookup(d, 1.0), right);
+  }
+  vec2 edge = min(e, 1.0 - e);                        // soft fade into the lens edge, no frame
+  float v = vignette > 0.0 ? smoothstep(0.0, vignette, min(edge.x * eyeAspect, edge.y)) : 1.0;
+  o = vec4(col * v, 1.0);
+}`;
+
+function compile(type, src) {
+  const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+  return sh;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog); gl.useProgram(prog);
+const U = {};
+for (const n of ["tex", "passthrough", "distort", "stereo", "k1", "k2", "lensOffset", "zoom",
+                 "eyeAspect", "tanD", "tanR", "vignette", "chroma", "delta"]) U[n] = gl.getUniformLocation(prog, n);
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+const loc = gl.getAttribLocation(prog, "p");
+gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+const tex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, tex);
+for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+                      [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]])
+  gl.texParameteri(gl.TEXTURE_2D, k, v);
+gl.uniform1i(U.tex, 0);
+let haveFrame = false;
+
+function uploadFrame(frame) {
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame);
+  haveFrame = true;
+}
+
+// Pose history, so we know roughly which head pose the arriving frame was rendered with
+const poseHist = [];
+function rememberPose(q) {
+  const now = performance.now();
+  poseHist.push({t: now, q});
+  while (poseHist.length && now - poseHist[0].t > 1500) poseHist.shift();
+}
+function poseAt(t) {
+  let best = poseHist[0];
+  for (const p of poseHist) { if (p.t <= t) best = p; else break; }
+  return best;
+}
+function qToRows(q) {
+  const [x, y, z, w] = q;
+  return [[1 - 2*(y*y + z*z), 2*(x*y - z*w),     2*(x*z + y*w)],
+          [2*(x*y + z*w),     1 - 2*(x*x + z*z), 2*(y*z - x*w)],
+          [2*(x*z - y*w),     2*(y*z + x*w),     1 - 2*(x*x + y*y)]];
+}
+const IDENTITY3 = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+// Rotation taking a ray in the CURRENT head frame into the frame the image was rendered with
+function warpMatrix() {
+  if (!lens.timewarp || poseHist.length < 2) return IDENTITY3;
+  const now = poseHist[poseHist.length - 1];
+  const then = poseAt(now.t - lens.latency_ms);
+  const A = qToRows(then.q), B = qToRows(now.q), m = new Float32Array(9);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+    let s = 0; for (let k = 0; k < 3; k++) s += A[k][i] * B[k][j];   // A^T * B
+    m[j * 3 + i] = s;                                                // column-major for GL
+  }
+  return m;
+}
+
+function draw() {
+  requestAnimationFrame(draw);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  if (!haveFrame) { gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); return; }
+  const stereo = lens.stereo !== false;
+  const rad = (deg) => deg * Math.PI / 180;
+  const tanD = Math.tan(rad(lens.eye_fov) / 2);
+  const tanR = lens.render_fov ? Math.tan(rad(lens.render_fov) / 2) : tanD * lens.overscan;
+  gl.uniform1i(U.passthrough, !lens.lens_on_phone);
+  gl.uniform1i(U.distort, !!lens.distortion);
+  gl.uniform1i(U.stereo, stereo);
+  gl.uniform1f(U.k1, lens.k1); gl.uniform1f(U.k2, lens.k2);
+  gl.uniform1f(U.lensOffset, lens.lens_offset); gl.uniform1f(U.zoom, lens.zoom);
+  gl.uniform1f(U.eyeAspect, (stereo ? canvas.width / 2 : canvas.width) / canvas.height);
+  gl.uniform1f(U.tanD, tanD); gl.uniform1f(U.tanR, tanR);
+  gl.uniform1f(U.vignette, lens.vignette || 0); gl.uniform1f(U.chroma, lens.chroma || 0);
+  gl.uniformMatrix3fv(U.delta, false, warpMatrix());
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  stats.draws = (stats.draws || 0) + 1;
+}
+requestAnimationFrame(draw);
+
+// ?grid=1 : synthetic side-by-side grid instead of video (tune distortion: lines must look straight)
+// ?test=1 : skip the start overlay (for automated screenshots)
+const PARAMS = new URLSearchParams(location.search);
+function makeGrid(w = 1600, h = 720) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const g = c.getContext("2d");
+  g.fillStyle = "#101418"; g.fillRect(0, 0, w, h);
+  for (let eye = 0; eye < 2; eye++) {
+    const x0 = eye * w / 2, ew = w / 2;
+    g.strokeStyle = "#3a6"; g.lineWidth = 2;
+    for (let i = 0; i <= 16; i++) {                       // grid lines every 1/16 of the eye
+      g.beginPath(); g.moveTo(x0 + i * ew / 16, 0); g.lineTo(x0 + i * ew / 16, h); g.stroke();
+      g.beginPath(); g.moveTo(x0, i * h / 16); g.lineTo(x0 + ew, i * h / 16); g.stroke();
+    }
+    g.strokeStyle = "#e33"; g.lineWidth = 4;              // red frame = edge of the rendered (overscanned) image
+    g.strokeRect(x0 + 2, 2, ew - 4, h - 4);
+    g.fillStyle = "#fd4"; g.beginPath(); g.arc(x0 + ew / 2, h / 2, 10, 0, 7); g.fill();
+    g.font = "28px sans-serif"; g.fillText(eye ? "RIGHT" : "LEFT", x0 + ew / 2 - 40, h / 2 - 30);
+  }
+  return c;
+}
+if (PARAMS.has("grid")) uploadFrame(makeGrid());
+if (PARAMS.has("test")) document.getElementById("start").hidden = true;
+
+// ── Start overlay: fullscreen, landscape, wake lock (need a user gesture) ───
+let wakeLock = null;
+async function keepAwake() {
+  try { wakeLock = await navigator.wakeLock.request("screen"); } catch (_) {}
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) keepAwake(); });
+
+keepAwake();   // often allowed without a tap; retried after the tap anyway
+
+// Fullscreen needs a real touch. The bridge sends one over adb when we ask for it,
+// so the headset never has to come off. If fullscreen is ever lost, ask again.
+const startEl = document.getElementById("start");
+function needTap() { return !startEl.hidden; }
+function askForTap() { if (needTap()) sendPose({cmd: "need_tap"}); }
+
+startEl.addEventListener("click", async () => {
+  startEl.hidden = true;
+  try { await document.documentElement.requestFullscreen({navigationUI: "hide"}); } catch (_) {}
+  try { await screen.orientation.lock("landscape"); } catch (_) {}
+  keepAwake();
+  hud.hidden = false;                          // show stats briefly, then get out of the way
+  setTimeout(() => { hud.hidden = true; }, 4000);
+});
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement) { startEl.hidden = false; askForTap(); }
+});
+setInterval(askForTap, 3000);                  // in case a tap landed before the page was ready
+
+// Tap = toggle HUD, double-tap = recenter
+let lastTap = 0, tapTimer = null;
+canvas.addEventListener("pointerup", () => {
+  const now = performance.now();
+  if (now - lastTap < 300) { clearTimeout(tapTimer); sendPose({cmd: "recenter"}); flash(); }
+  else tapTimer = setTimeout(() => hud.hidden = !hud.hidden, 310);
+  lastTap = now;
+});
+function flash() { hud.hidden = false; hud.textContent = "RECENTER"; }
+
+// ── Pose: phone orientation → laptop ─────────────────────────────────────────
+let poseWs = null;
+function connectPose() {
+  poseWs = new WebSocket(`${wsBase}/ws/pose`);
+  poseWs.onopen = () => { stats.pose = "ok"; askForTap(); };
+  poseWs.onmessage = (ev) => {                 // lens/timewarp settings from Godot
+    const msg = JSON.parse(ev.data);
+    if (msg.lens) Object.assign(lens, msg.lens);
+  };
+  poseWs.onclose = () => { stats.pose = "reconnecting"; setTimeout(connectPose, 1000); };
+}
+function sendPose(msg) {
+  if (poseWs && poseWs.readyState === 1 && poseWs.bufferedAmount < 4096) poseWs.send(JSON.stringify(msg));
+}
+function poseOut(q, src) {
+  stats.poseN++; stats.poseSrc = src;
+  rememberPose(q);
+  sendPose({q, t: performance.now(), src});
+}
+
+// Quaternion helpers, [x, y, z, w]
+function qMul(a, b) {
+  return [a[3]*b[0] + a[0]*b[3] + a[1]*b[2] - a[2]*b[1],
+          a[3]*b[1] - a[0]*b[2] + a[1]*b[3] + a[2]*b[0],
+          a[3]*b[2] + a[0]*b[1] - a[1]*b[0] + a[2]*b[3],
+          a[3]*b[3] - a[0]*b[0] - a[1]*b[1] - a[2]*b[2]];
+}
+function screenAngle() { return (screen.orientation ? screen.orientation.angle : window.orientation || 0) || 0; }
+
+// Fallback: deviceorientation (α,β,γ in degrees, Z-X'-Y'') → quaternion in the same
+// "screen" frame that RelativeOrientationSensor uses (W3C spec formula + screen rotation).
+function eulerToScreenQuat(alpha, beta, gamma) {
+  const d = Math.PI / 180;
+  const x = (beta || 0) * d / 2, y = (gamma || 0) * d / 2, z = (alpha || 0) * d / 2;
+  const cX = Math.cos(x), cY = Math.cos(y), cZ = Math.cos(z), sX = Math.sin(x), sY = Math.sin(y), sZ = Math.sin(z);
+  const q = [sX*cY*cZ - cX*sY*sZ, cX*sY*cZ + sX*cY*sZ, cX*cY*sZ + sX*sY*cZ, cX*cY*cZ - sX*sY*sZ];
+  const a = -screenAngle() * d / 2;
+  return qMul(q, [0, 0, Math.sin(a), Math.cos(a)]);
+}
+
+function startOrientation() {
+  // Best: gyro+accel fusion at 60 Hz, already in screen coordinates, no compass drift jumps
+  if ("RelativeOrientationSensor" in window) {
+    try {
+      const s = new RelativeOrientationSensor({frequency: 60, referenceFrame: "screen"});
+      s.onreading = () => poseOut(Array.from(s.quaternion), "gyro");
+      s.onerror = (e) => { console.warn("RelativeOrientationSensor:", e.error); startFallback(); };
+      s.start();
+      return;
+    } catch (e) { console.warn(e); }
+  }
+  startFallback();
+}
+let fallbackStarted = false;
+function startFallback() {
+  if (fallbackStarted) return; fallbackStarted = true;
+  // Phones without a gyro: try accelerometer tilt first (pitch + roll only, yaw stays 0
+  // so the mouse/controller turns the body), then the legacy orientation events.
+  if (startTilt()) return;
+  const handler = (src) => (e) => { if (e.alpha != null) poseOut(eulerToScreenQuat(e.alpha, e.beta, e.gamma), src); };
+  addEventListener("deviceorientation", handler("euler"));
+  addEventListener("deviceorientationabsolute", handler("compass"));
+}
+
+// ── Tilt mode: gravity vector → pitch/roll quaternion (no yaw) ───────────────
+// Low-pass factor per reading at 60 Hz. Lower = smoother but laggier.
+// Head movement adds acceleration that looks like tilt, so some smoothing is needed.
+const TILT_SMOOTH = 0.25;
+// Chrome on the A08 rotates landscape "screen"-frame readings 180° the wrong way
+// (held level in landscape, it reported the screen's top edge pointing down), which
+// inverted pitch. Undo it in landscape. Open the page with ?flip=0 to disable.
+const FLIP_LANDSCAPE = new URLSearchParams(location.search).get("flip") !== "0";
+let grav = null;
+
+function startTilt() {
+  if (!("Accelerometer" in window)) return false;
+  try {
+    const s = new Accelerometer({frequency: 60, referenceFrame: "screen"});
+    s.onreading = () => {
+      let x = s.x, y = s.y;
+      if (FLIP_LANDSCAPE && screenAngle() % 180 !== 0) { x = -x; y = -y; }
+      stats.g = `${x.toFixed(1)},${y.toFixed(1)},${s.z.toFixed(1)}`;
+      tiltFromGravity(x, y, s.z);
+    };
+    s.onerror = (e) => { console.warn("Accelerometer:", e.error); };
+    s.start();
+    return true;
+  } catch (e) { console.warn(e); return false; }
+}
+
+function tiltFromGravity(ax, ay, az) {
+  if (!grav) grav = [ax, ay, az];
+  else for (const [i, v] of [ax, ay, az].entries()) grav[i] += TILT_SMOOTH * (v - grav[i]);
+  const n = Math.hypot(...grav); if (n < 1) return;
+  const u = grav.map(v => v / n);                 // world "up" in screen coords
+  // Heading = screen's look direction (-Z) flattened onto the horizontal plane.
+  // Looking almost straight up/down it vanishes, so use the screen's top edge instead.
+  const fu = -u[2];
+  let h = [0 - fu * u[0], 0 - fu * u[1], -1 - fu * u[2]];
+  if (Math.hypot(...h) < 0.15) {
+    const s = fu > 0 ? -1 : 1, yu = u[1];
+    h = [s * (0 - yu * u[0]), s * (1 - yu * u[1]), s * (0 - yu * u[2])];
+  }
+  const hn = Math.hypot(...h); const Y = h.map(v => v / hn), Z = u;
+  const X = [Y[1]*Z[2] - Y[2]*Z[1], Y[2]*Z[0] - Y[0]*Z[2], Y[0]*Z[1] - Y[1]*Z[0]];
+  poseOut(matToQuat(X, Y, Z), "tilt");
+}
+
+// Rows X, Y, Z = world east/north/up axes expressed in screen coords → quaternion [x,y,z,w]
+// (same convention as RelativeOrientationSensor: device-to-world rotation, Z-up world)
+function matToQuat(X, Y, Z) {
+  const m00 = X[0], m01 = X[1], m02 = X[2], m10 = Y[0], m11 = Y[1], m12 = Y[2],
+        m20 = Z[0], m21 = Z[1], m22 = Z[2], tr = m00 + m11 + m22;
+  let s;
+  if (tr > 0) { s = 0.5 / Math.sqrt(tr + 1);
+    return [(m21 - m12) * s, (m02 - m20) * s, (m10 - m01) * s, 0.25 / s]; }
+  if (m00 > m11 && m00 > m22) { s = 2 * Math.sqrt(1 + m00 - m11 - m22);
+    return [0.25 * s, (m01 + m10) / s, (m02 + m20) / s, (m21 - m12) / s]; }
+  if (m11 > m22) { s = 2 * Math.sqrt(1 + m11 - m00 - m22);
+    return [(m01 + m10) / s, 0.25 * s, (m12 + m21) / s, (m02 - m20) / s]; }
+  s = 2 * Math.sqrt(1 + m22 - m00 - m11);
+  return [(m02 + m20) / s, (m12 + m21) / s, 0.25 * s, (m10 - m01) / s];
+}
+
+// ── Video: H.264 (avcC + length-prefixed NALs) → WebCodecs → canvas ──────────
+let decoder = null, waitingForKey = true, frameTs = 0;
+const MSG_CONFIG = 0, MSG_KEY = 1, MSG_DELTA = 2;
+
+function makeDecoder(desc) {
+  if (decoder && decoder.state !== "closed") decoder.close();
+  const hex = (b) => b.toString(16).padStart(2, "0");
+  const codec = `avc1.${hex(desc[1])}${hex(desc[2])}${hex(desc[3])}`;
+  decoder = new VideoDecoder({
+    output: (frame) => {
+      uploadFrame(frame);                      // drawn every display refresh by draw()
+      stats.w = frame.displayWidth; stats.h = frame.displayHeight;
+      frame.close(); stats.frames++;
+    },
+    error: (e) => { console.error(e); stats.video = "decoder error: " + e.message; waitingForKey = true; },
+  });
+  decoder.configure({codec, description: desc, optimizeForLatency: true, hardwareAcceleration: "prefer-hardware"});
+  waitingForKey = true;
+  stats.video = "configured " + codec;
+}
+
+function connectVideo() {
+  if (!("VideoDecoder" in window)) { stats.video = "no WebCodecs (use Chrome)"; return; }
+  const ws = new WebSocket(`${wsBase}/ws/video`);
+  ws.binaryType = "arraybuffer";
+  ws.onmessage = (ev) => {
+    if (typeof ev.data === "string") { stats.video = JSON.parse(ev.data).error || ev.data; serverError = true; return; }
+    const buf = new Uint8Array(ev.data), kind = buf[0], data = buf.subarray(1);
+    if (kind === MSG_CONFIG) return makeDecoder(data.slice());
+    if (!decoder || decoder.state !== "configured") return;
+    if (kind === MSG_DELTA && waitingForKey) { stats.dropped++; return; }
+    // Phone falling behind: skip deltas until the next keyframe instead of building latency
+    if (kind === MSG_DELTA && decoder.decodeQueueSize > 2) { waitingForKey = true; stats.dropped++; return; }
+    if (kind === MSG_KEY) waitingForKey = false;
+    frameTs += 16667;
+    decoder.decode(new EncodedVideoChunk({type: kind === MSG_KEY ? "key" : "delta", timestamp: frameTs, data}));
+    stats.decodeQ = decoder.decodeQueueSize;
+  };
+  let serverError = false;
+  ws.onopen = () => stats.video = "connected, waiting for stream";
+  ws.onclose = () => {
+    // Keep retrying (slower after a server error such as "start the game first"),
+    // so the stream starts by itself once the game or bridge is (re)started.
+    if (!serverError) stats.video = "reconnecting";
+    setTimeout(connectVideo, serverError ? 3000 : 1500);
+  };
+}
+
+// ── HUD ──────────────────────────────────────────────────────────────────────
+setInterval(() => {
+  stats.poseHz = stats.poseN; stats.poseN = 0;
+  stats.fps = stats.frames; stats.frames = 0;
+  const drawHz = stats.draws || 0; stats.draws = 0;
+  hud.textContent =
+    `lens on ${lens.lens_on_phone ? "PHONE" : "laptop"}  timewarp ${lens.timewarp ? lens.latency_ms + " ms" : "off"}` +
+    `  overscan ${lens.overscan}  draw ${drawHz} Hz\n` +
+    `pose  ${stats.poseHz} Hz (${stats.poseSrc}) ${stats.pose}` +
+    (stats.g ? `  g=${stats.g} flip=${FLIP_LANDSCAPE ? 1 : 0} angle=${screenAngle()}` : "") + "\n" +
+    `video ${stats.fps} fps ${stats.w}x${stats.h} q=${stats.decodeQ} drop=${stats.dropped}\n` +
+    `      ${stats.video}\n` +
+    `canvas ${canvas.width}x${canvas.height}`;
+}, 1000);
+
+connectPose();
+startOrientation();
+if (!PARAMS.has("grid")) connectVideo();
+</script>
+</body>
+</html>

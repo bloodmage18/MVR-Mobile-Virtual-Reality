@@ -1,0 +1,32 @@
+Papers & Things to Study
+Tier 1 — Read These First (Core to your project)
+Topic	What to find/read
+Async Timewarp	Search: "Oculus Asynchronous Timewarp" — the original Oculus engineering blog post (2015) by Tom Forsyth. This is the foundational ATW write-up.
+Split Rendering	Furion: Engineering High-Quality Mobile Immersive Applications with Hybrid Rendering — MobiSys 2019. Real paper, directly relevant.
+Mobile VR Streaming	Search: "Outatime: Using Speculation to Enable Low-Latency Continuous Interaction for Mobile Cloud Gaming" — MobiSys 2015. Covers speculative frame generation for low latency, maps closely to your ATW need.
+Motion-to-Photon Latency	Search: "Characterizing the Influence of Motion-to-Photon Latency in Spatial Augmented Reality" — IEEE VR. Also look for Valve's latency whitepapers.
+Sensor Fusion / Kalman	Search: "A Comparison of Complementary and Kalman Filtering" by Colton (2007). Short, practical, directly applicable to smoothing gyro data.
+Tier 2 — Study These (Implementation knowledge)
+Topic	Resource
+iOS USB tunnel	libimobiledevice wiki + pymobiledevice3 on GitHub (doronz88) — read the README and tunneling examples
+PeerTalk (iOS sockets over USB)	rsms/peertalk on GitHub — the reference impl for iOS↔Mac over USB, adaptable to iOS↔Windows
+VideoToolbox	Apple Developer Docs: VideoToolbox framework — specifically VTDecompressionSession for hardware H.264 decode on iPhone
+NVENC / GPU encoding	NVIDIA Video Codec SDK documentation — focus on low-latency presets (NV_ENC_PRESET_LOW_LATENCY_HP_GUID)
+Godot GDExtension	Godot 4 docs: GDExtension overview + RenderingDevice API — study rd_texture and RenderingServer before writing C++
+ALVR source	alvr/alvr_client_core on GitHub — read motion_prediction.rs and connection.rs for real ATW + USB-like streaming impl
+H.264 for low latency	Search: "H.264 low latency encoding profile" — understand Baseline Profile, zerolatency tune in FFmpeg, and keyframe interval
+Tier 3 — Background / When Ready
+Topic	Resource
+Quaternion math for VR	3Blue1Brown's quaternion video series + "Visualizing Quaternions" by Hanson (book)
+Foveated rendering	Search: "Foveated Rendering: A State of the Art Survey" — useful when you hit performance ceilings
+CloudXR	NVIDIA CloudXR SDK docs — study the architecture even if you don't use the SDK, it's the best reference for split rendering design
+Moonlight/Sunshine	Sunshine source on GitHub — look at the encoder pipeline (NvencEncoder.cpp) for how they achieve sub-20ms game streaming
+Recommended Study Order
+Outatime paper (latency/speculation concepts)
+Furion paper (split rendering architecture)
+Oculus ATW blog post (timewarp implementation mental model)
+pymobiledevice3 README → get USB tunnel working as a proof of concept
+PeerTalk → understand the iOS socket side
+ALVR source (motion_prediction.rs) → steal the prediction math
+VideoToolbox docs → build a bare-bones iOS H.264 decoder app
+The USB tunnel proof-of-concept should be your first hands-on milestone — nothing else in the pipeline matters until you can reliably send bytes from your laptop to the iPhone 12 over USB. Start there.

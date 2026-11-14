@@ -1,0 +1,211 @@
+{
+  // ============================================================
+  //  Whisper STT — Configuration File
+  //  Edit values here; comments (// ...) are stripped at load.
+  // ============================================================
+
+  // ── INPUT ────────────────────────────────────────────────────
+  "input": {
+    // Path to the audio file to transcribe.
+    // Overridden if a path is passed as the first CLI argument.
+    // Supported formats: mp3, mp4, m4a, wav, flac, ogg, webm
+    "audio_file": "Recording.m4a",
+
+    // Reserved: directory to batch-process all audio files inside.
+    // Not yet implemented; set to null.
+    "audio_dir": null
+  },
+
+  // ── MODEL ─────────────────────────────────────────────────────
+  "model": {
+    // Whisper model size. Trade-off: accuracy vs. speed vs. RAM.
+    //   "tiny"     ~39M params  — fastest, lowest accuracy, ~1 GB RAM
+    //   "base"     ~74M params  — good balance for most use cases
+    //   "small"    ~244M params — noticeably better accuracy
+    //   "medium"   ~769M params — high accuracy, needs ~5 GB RAM
+    //   "large"    ~1.5B params — best accuracy, needs ~10 GB RAM
+    //   "large-v2" — improved large, recommended over "large"
+    //   "large-v3" — latest, best overall accuracy
+    "name": "base",
+
+    // Hardware device to run on.
+    //   null   — auto-detect (uses CUDA/GPU if available, else CPU)
+    //   "cuda" — force GPU (requires NVIDIA GPU + CUDA drivers)
+    //   "cpu"  — force CPU (slower but always works)
+    "device": null,
+
+    // Folder where model weights are downloaded and cached.
+    // null = default (~/.cache/whisper on Windows: %USERPROFILE%\.cache\whisper)
+    "download_root": null,
+
+    // Load the entire model into RAM instead of streaming from disk.
+    // Faster repeated use, but uses more memory. false = lazy load.
+    "in_memory": false
+  },
+
+  // ── TRANSCRIPTION ─────────────────────────────────────────────
+  "transcription": {
+    // Language of the audio. null = auto-detect (slight overhead).
+    // Use ISO 639-1 codes: "en", "fr", "es", "de", "zh", "ar", etc.
+    // Setting this explicitly is faster and avoids misdetection.
+    "language": null,
+
+    // What to do with the audio.
+    //   "transcribe" — output text in the source language
+    //   "translate"  — output English regardless of source language
+    "task": "transcribe",
+
+    // Sampling temperatures tried in order when the previous attempt
+    // fails (compression ratio or log-prob thresholds not met).
+    // A single float (e.g. 0.0) = deterministic greedy decoding.
+    // A list = fallback chain: starts at 0.0 and increases if needed.
+    // Lower values → more deterministic. Higher → more creative/varied.
+    "temperature": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+
+    // Text prepended to the first decoding window to guide the model.
+    // Use this to prime vocabulary, speaker names, or domain terms.
+    // Example: "Fleet management report. Speaker: John."
+    // null = no prompt.
+    "initial_prompt": null,
+
+    // Whether to pass the transcribed text of each window as context
+    // for the next. Improves consistency across long audio.
+    // Set to false if you notice hallucinations or repetition loops.
+    "condition_on_previous_text": true,
+
+    // If true, the initial_prompt is re-injected at every decode window
+    // (not just the first). Useful to enforce formatting throughout.
+    "carry_initial_prompt": false,
+
+    // Probability threshold below which a segment is marked as silence.
+    // Range: 0.0–1.0. Higher = more aggressive silence filtering.
+    // Raise if the model is transcribing background noise as speech.
+    "no_speech_threshold": 0.6,
+
+    // Segments whose average log-probability is below this are retried
+    // at a higher temperature. More negative = more tolerant of uncertainty.
+    // Range: typically -3.0 to 0.0.
+    "logprob_threshold": -1.0,
+
+    // Segments with a gzip compression ratio above this are considered
+    // repetitive or hallucinated and retried. Lower = stricter.
+    // Typical range: 1.5–3.0. Default 2.4 works for most audio.
+    "compression_ratio_threshold": 2.4,
+
+    // If true, each word gets its own start/end timestamp in JSON output.
+    // Only meaningful when output format is "json".
+    "word_timestamps": false,
+
+    // Controls progress output during transcription.
+    //   false — silent (only final result printed)
+    //   true  — prints each segment as it is decoded
+    //   null  — prints segments only if input is not a file
+    "verbose": false
+  },
+
+  // ── DECODING ──────────────────────────────────────────────────
+  "decoding": {
+    // Number of beams used in beam search. Higher = more accurate
+    // but slower. 1 = greedy decoding (fastest). Default: 5.
+    "beam_size": 5,
+
+    // Number of candidates sampled when temperature > 0.
+    // The one with the highest log-probability is kept. Default: 5.
+    "best_of": 5,
+
+    // Beam search patience factor. Higher = explore more beams before
+    // stopping early. null = default (1.0). Rarely needs changing.
+    "patience": null,
+
+    // Exponential length penalty applied to beam scores.
+    // null = no penalty. Positive values favor longer outputs.
+    "length_penalty": null,
+
+    // If true, blank tokens at the start of a segment are suppressed.
+    // Prevents the model from starting segments with silence tokens.
+    "suppress_blank": true,
+
+    // List of token IDs to never generate. [-1] suppresses special
+    // tokens only. Use [] to suppress nothing. Rarely needs changing.
+    "suppress_tokens": [-1],
+
+    // Use 16-bit floating point for inference.
+    // true = faster on CUDA GPU; false = required on CPU (auto-forced).
+    "fp16": false
+  },
+
+  // ── OUTPUT ────────────────────────────────────────────────────
+  "output": {
+    // Folder to write the output file into.
+    // null = same directory as the audio file.
+    "output_dir": null,
+
+    // String appended to the output filename before the extension.
+    // Example: "_clean" → "Recording_clean.txt"
+    // Leave as "" for no suffix.
+    "filename_suffix": "",
+
+    // Output file format.
+    //   "txt"  — plain text transcript
+    //   "json" — full result including segments, timestamps, language
+    //   "srt"  — subtitle file with segment-level timestamps
+    "format": "txt",
+
+    // Print the transcription to the console when done.
+    "print_to_console": true
+  },
+
+  // ── LIVE AUDIO ────────────────────────────────────────────────
+  // Used by stt_live.py only. Has no effect on stt.py (file mode).
+  "live": {
+
+    // Audio source to capture.
+    //   "microphone" — capture from mic input device
+    //   "speaker"    — capture what is playing through the speakers
+    //                  (WASAPI loopback on Windows; enable "Stereo Mix"
+    //                   in Sound settings if no loopback device is found)
+    "source": "microphone",
+
+    // Transcription strategy.
+    //   "streaming" — transcribe in fixed-length chunks in real-time.
+    //                 Recommended for microphone: low latency, output
+    //                 appears as you speak. Each chunk feeds context to
+    //                 the next via condition_on_previous_text.
+    //   "full"      — record everything first, then transcribe once.
+    //                 Higher accuracy but no output until you stop.
+    //                 Better for speaker capture or short press-to-talk.
+    "strategy": "streaming",
+
+    // Length of each audio chunk in seconds (streaming mode only).
+    // Shorter = lower latency but more boundary artifacts.
+    // Longer  = more accurate but you wait longer for each result.
+    // Recommended range: 4–10. Whisper's internal window is 30s.
+    "chunk_duration_seconds": 5,
+
+    // RMS amplitude below which a chunk is treated as silence and
+    // skipped without sending to Whisper. Prevents transcribing noise.
+    // Typical range: 0.005 (very sensitive) – 0.05 (less sensitive).
+    "silence_threshold": 0.01,
+
+    // Input device index for the microphone.
+    // null = use system default mic.
+    // Run --list-devices to see all available device indices.
+    "microphone_device_index": null,
+
+    // Input device index for speaker loopback capture.
+    // null = auto-detect the first WASAPI loopback device.
+    // Run --list-devices to find the correct index if auto-detect fails.
+    "speaker_device_index": null,
+
+    // Save the captured raw audio to a WAV file as well as transcribing.
+    "save_recording": false,
+
+    // Path for the saved WAV file (when save_recording is true).
+    "recording_output": "live_recording.wav",
+
+    // Suffix added to the auto-generated transcript filename.
+    // Output will be: transcript_<suffix>_<timestamp>.txt
+    // null = defaults to "_microphone_live" or "_speaker_live"
+    "transcript_suffix": null
+  }
+}

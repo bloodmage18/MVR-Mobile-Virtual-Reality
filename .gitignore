@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Godot
+.godot/
+*.tmp
+
+# Generated at runtime
+bridge/sensor_report.json
+
+# Personal recordings / transcripts (not part of the project)
+*.m4a
+Recording.txt
+transcript*.txt
+live_recording.wav

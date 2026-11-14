@@ -1,0 +1,44 @@
+the purpose of this project is to make a game
+a simple game and test out cross reality functionality with a hmd
+1. the game is a horror game
+2. the controsl are kwyboard and mouse or controller
+3. a phone can be used as an hmd (thisis important)
+4. game supports virtual reality but focuses on hmd experience
+
+test devices
+1. iphone 12 as hmd
+2. mobile vr heaset
+3. iphone cable
+4. my laptop
+5. keyboard and mouse
+6. earbuds just to increase imersion
+
+tech stack
+1. godot
+2. vs code
+3. python
+
+
+original thoughts for this
+i have the headset and phone but i tried bridge with steam vr mode
+but it was too processor eavy , running steam , gams and other stuff , it kept lagging
+also the software has been old and not updated for current hardware 
+which kept heating up both laptop and phone to high degrees
+so i thought why not bypass it all at once and make my own
+it has to be light weight with no lag , the phone and mobile heaset will act as screens
+with the phones gyroscore adding ectra mobility control 
+
+
+so heres the deal , we make a simple game enviroment in godot , 3d and 3d offcourse 
+then we prep the devices connect and start playing
+
+thre are a few things i want to test out too, a vvideo library and book libreary viewd witht he hmd
+(head mounted display and others too)
+
+for now its time to research and plan 
+
+
+if i had an andriod with a gyroscope in it , things would have been way easier 
+but i have an iphone which just raised everything to 80lvl diffivulty
+
+so lets begin planning 

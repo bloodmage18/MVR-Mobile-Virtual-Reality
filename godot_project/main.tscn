@@ -1,0 +1,105 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/hmd_player.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/hmd_head.gd" id="2_head"]
+[ext_resource type="Script" path="res://scripts/hmd_stereo.gd" id="3_stereo"]
+
+[sub_resource type="Environment" id="Env"]
+background_mode = 1
+background_color = Color(0.02, 0.02, 0.03, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.12, 0.12, 0.16, 1)
+fog_enabled = true
+fog_light_color = Color(0.05, 0.05, 0.07, 1)
+fog_density = 0.04
+
+[sub_resource type="BoxMesh" id="FloorMesh"]
+size = Vector3(40, 0.2, 40)
+
+[sub_resource type="BoxShape3D" id="FloorShape"]
+size = Vector3(40, 0.2, 40)
+
+[sub_resource type="StandardMaterial3D" id="FloorMat"]
+albedo_color = Color(0.25, 0.25, 0.25, 1)
+
+[sub_resource type="BoxMesh" id="PillarMesh"]
+size = Vector3(1, 4, 1)
+
+[sub_resource type="StandardMaterial3D" id="Red"]
+albedo_color = Color(0.7, 0.1, 0.1, 1)
+
+[sub_resource type="StandardMaterial3D" id="Green"]
+albedo_color = Color(0.1, 0.6, 0.15, 1)
+
+[sub_resource type="StandardMaterial3D" id="Blue"]
+albedo_color = Color(0.15, 0.25, 0.75, 1)
+
+[sub_resource type="StandardMaterial3D" id="Yellow"]
+albedo_color = Color(0.75, 0.65, 0.1, 1)
+
+[sub_resource type="CapsuleShape3D" id="PlayerShape"]
+radius = 0.35
+height = 1.8
+
+[node name="Main" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env")
+
+[node name="Moonlight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.5, 0.866, 0, -0.866, 0.5, 0, 8, 0)
+light_color = Color(0.55, 0.6, 0.8, 1)
+light_energy = 0.25
+
+[node name="Floor" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+
+[node name="Mesh" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("FloorMesh")
+surface_material_override/0 = SubResource("FloorMat")
+
+[node name="Shape" type="CollisionShape3D" parent="Floor"]
+shape = SubResource("FloorShape")
+
+[node name="PillarNorthRed" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -8)
+mesh = SubResource("PillarMesh")
+surface_material_override/0 = SubResource("Red")
+
+[node name="PillarEastGreen" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0)
+mesh = SubResource("PillarMesh")
+surface_material_override/0 = SubResource("Green")
+
+[node name="PillarSouthBlue" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 8)
+mesh = SubResource("PillarMesh")
+surface_material_override/0 = SubResource("Blue")
+
+[node name="PillarWestYellow" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 2, 0)
+mesh = SubResource("PillarMesh")
+surface_material_override/0 = SubResource("Yellow")
+
+[node name="Player" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+script = ExtResource("1_player")
+
+[node name="Shape" type="CollisionShape3D" parent="Player"]
+shape = SubResource("PlayerShape")
+
+[node name="Head" type="Node3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
+script = ExtResource("2_head")
+
+[node name="Camera3D" type="Camera3D" parent="Player/Head"]
+current = true
+fov = 80.0
+
+[node name="Flashlight" type="SpotLight3D" parent="Player/Head"]
+light_energy = 3.0
+spot_range = 15.0
+spot_angle = 28.0
+
+[node name="HMDStereo" type="CanvasLayer" parent="."]
+script = ExtResource("3_stereo")

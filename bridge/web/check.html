@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HMD Phone Check</title>
+<style>
+  body { margin: 0; padding: 16px; background: #0b0d10; color: #e6e6e6;
+         font: 15px/1.45 system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #8b949e; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 7px 6px; border-bottom: 1px solid #222831; vertical-align: top; }
+  td:first-child { width: 34px; font-weight: 700; }
+  .ok { color: #3fb950; } .warn { color: #d29922; } .bad { color: #f85149; } .dim { color: #8b949e; }
+  #verdict { margin: 16px 0; padding: 12px; border-radius: 8px; background: #161b22; font-weight: 600; }
+  button { font: inherit; padding: 10px 16px; border-radius: 8px; border: 0; background: #2f81f7; color: #fff; }
+  a { color: #58a6ff; }
+</style>
+</head>
+<body>
+<h1>Phone check for the HMD</h1>
+<div class="sub">Tests what this phone can do. The result is also sent to the laptop console.</div>
+<div id="verdict">Running tests…</div>
+<table id="rows"></table>
+<p><button id="rerun">Run again</button> &nbsp; <a href="/">Open HMD view →</a></p>
+
+<script>
+const rows = document.getElementById("rows");
+const results = {};
+const summary = [];
+
+function row(status, name, detail) {
+  const cls = {OK: "ok", WARN: "warn", FAIL: "bad", INFO: "dim"}[status];
+  const icon = {OK: "✔", WARN: "!", FAIL: "✘", INFO: "·"}[status];
+  rows.insertAdjacentHTML("beforeend",
+    `<tr><td class="${cls}">${icon}</td><td><b>${name}</b><br><span class="dim">${detail}</span></td></tr>`);
+  summary.push(`[${status.padEnd(4)}] ${name}: ${detail}`);
+}
+
+// Start a Generic Sensor API sensor for `ms` and count readings
+function probeSensor(name, ms = 2500) {
+  return new Promise(resolve => {
+    const Ctor = window[name];
+    if (!Ctor) return resolve({available: false, error: "API not supported by this browser"});
+    let sensor, count = 0, sample = null;
+    try {
+      sensor = new Ctor({frequency: 60});
+    } catch (e) {
+      return resolve({available: false, error: `${e.name}: ${e.message}`});
+    }
+    const done = (res) => { try { sensor.stop(); } catch (_) {} resolve(res); };
+    sensor.onreading = () => {
+      count++;
+      if (!sample) sample = sensor.quaternion ? Array.from(sensor.quaternion).map(v => +v.toFixed(3))
+                                              : [sensor.x, sensor.y, sensor.z].map(v => +(+v).toFixed(3));
+    };
+    sensor.onerror = (e) => done({available: false, error: `${e.error.name}: ${e.error.message}`});
+    sensor.start();
+    setTimeout(() => done({available: count > 0, hz: +(count / (ms / 1000)).toFixed(1), sample,
+                           error: count ? null : "no readings"}), ms);
+  });
+}
+
+function probeEvent(type, ms = 1500) {
+  return new Promise(resolve => {
+    let count = 0, last = null;
+    const h = (e) => { count++; last = e; };
+    window.addEventListener(type, h);
+    setTimeout(() => {
+      window.removeEventListener(type, h);
+      const info = {count, hz: +(count / (ms / 1000)).toFixed(1)};
+      if (type.startsWith("deviceorientation") && last)
+        info.values = [last.alpha, last.beta, last.gamma].map(v => v == null ? null : +v.toFixed(1));
+      if (type === "devicemotion" && last) {
+        const r = last.rotationRate;
+        info.rotationRate = r && r.alpha != null;   // true only with a gyroscope
+        info.interval_ms = last.interval;
+      }
+      resolve(info);
+    }, ms);
+  });
+}
+
+function measureRefresh(ms = 1000) {
+  return new Promise(resolve => {
+    let frames = 0; const t0 = performance.now();
+    (function tick(t) { frames++; if (t - t0 < ms) requestAnimationFrame(tick);
+                        else resolve(Math.round(frames * 1000 / (t - t0))); })(t0);
+  });
+}
+
+async function run() {
+  rows.innerHTML = ""; summary.length = 0;
+  document.getElementById("verdict").textContent = "Running tests…";
+
+  // Device basics
+  const dpr = window.devicePixelRatio;
+  const physW = Math.round(Math.max(screen.width, screen.height) * dpr);
+  const physH = Math.round(Math.min(screen.width, screen.height) * dpr);
+  results.screen = {physW, physH, dpr, refreshHz: await measureRefresh()};
+  row("INFO", "Screen", `${physW}×${physH} px (landscape), dpr ${dpr}, ~${results.screen.refreshHz} Hz`);
+  results.userAgent = navigator.userAgent;
+  row(window.isSecureContext ? "OK" : "FAIL", "Secure context",
+      window.isSecureContext ? "yes (localhost over USB)" : "NO: open via http://localhost:8080 (adb reverse), not the laptop IP");
+
+  // Sensors (Generic Sensor API, Chrome)
+  for (const name of ["Gyroscope", "Accelerometer", "Magnetometer",
+                      "RelativeOrientationSensor", "AbsoluteOrientationSensor"]) {
+    const r = await probeSensor(name);
+    results[name] = r;
+    const critical = name === "Gyroscope" || name === "RelativeOrientationSensor";
+    row(r.available ? "OK" : (critical ? "FAIL" : "WARN"), name,
+        r.available ? `${r.hz} Hz, sample ${JSON.stringify(r.sample)}` : r.error);
+  }
+
+  // Legacy events (fallback path)
+  const ori = await probeEvent("deviceorientation");
+  results.deviceorientation = ori;
+  row(ori.count && ori.values && ori.values[0] != null ? "OK" : "WARN", "deviceorientation event",
+      ori.count ? `${ori.hz} Hz, α/β/γ = ${JSON.stringify(ori.values)}` : "no events");
+  const mot = await probeEvent("devicemotion");
+  results.devicemotion = mot;
+  row(mot.rotationRate ? "OK" : "WARN", "devicemotion rotationRate",
+      mot.count ? (mot.rotationRate ? `present, interval ${mot.interval_ms} ms` : "null → no gyroscope")
+                : "no events");
+
+  // Video decode
+  let h264 = false, hw = "unknown";
+  if ("VideoDecoder" in window) {
+    try {
+      const s1 = await VideoDecoder.isConfigSupported({codec: "avc1.4D0028", hardwareAcceleration: "prefer-hardware"});
+      const s2 = await VideoDecoder.isConfigSupported({codec: "avc1.4D0028", hardwareAcceleration: "prefer-software"});
+      h264 = s1.supported || s2.supported; hw = s1.supported ? "hardware" : (s2.supported ? "software only" : "none");
+    } catch (e) { hw = e.name; }
+  }
+  results.webcodecs = {h264, hw};
+  row(h264 ? (hw === "hardware" ? "OK" : "WARN") : "FAIL", "WebCodecs H.264 decode",
+      "VideoDecoder" in window ? hw : "VideoDecoder API missing (use Chrome)");
+
+  // Display helpers
+  results.wakeLock = "wakeLock" in navigator;
+  results.fullscreen = !!document.documentElement.requestFullscreen;
+  results.orientationLock = !!(screen.orientation && screen.orientation.lock);
+  row(results.wakeLock && results.fullscreen ? "OK" : "WARN", "Wake lock / fullscreen / orientation lock",
+      `${results.wakeLock} / ${results.fullscreen} / ${results.orientationLock}`);
+
+  // Verdict
+  const gyro = (results.Gyroscope && results.Gyroscope.available) || mot.rotationRate;
+  const rel = results.RelativeOrientationSensor && results.RelativeOrientationSensor.available;
+  let verdict, cls;
+  if (gyro && rel && h264) { verdict = "READY: gyroscope + H.264 decode present. Go to Phase 1."; cls = "ok"; }
+  else if (!gyro) { verdict = "NO GYROSCOPE detected. Head tracking needs the fallback plan (see PLAN_ANDROID_WINDOWS.md)."; cls = "bad"; }
+  else { verdict = "Partly ready: see the red/orange rows."; cls = "warn"; }
+  results.verdict = verdict;
+  summary.unshift("VERDICT: " + verdict);
+  const v = document.getElementById("verdict");
+  v.textContent = verdict; v.className = cls;
+
+  try {
+    await fetch("/api/report", {method: "POST", headers: {"Content-Type": "application/json"},
+                                body: JSON.stringify({summary, results, time: new Date().toISOString()})});
+  } catch (e) { row("WARN", "Report upload", "could not reach the laptop bridge"); }
+}
+
+document.getElementById("rerun").onclick = run;
+run();
+</script>
+</body>
+</html>
