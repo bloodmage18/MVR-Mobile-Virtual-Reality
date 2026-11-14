@@ -77,8 +77,14 @@ func _process(_delta: float) -> void:
 
 
 ## Makes the direction the player is facing right now "straight ahead" (yaw only).
+## If the phone is pointing (nearly) straight up or down, e.g. lying on the desk when the
+## game starts, its heading is meaningless; recentering then locked in a random turn so
+## "forward" walked you sideways. Wait until it points within ~60 degrees of level.
 func recenter() -> void:
 	var forward := -_raw.z
+	if Vector2(forward.x, forward.z).length() < 0.5:
+		_needs_recenter = true   # try again next frame
+		return
 	var yaw := atan2(-forward.x, -forward.z)
 	_yaw_offset = Basis(Vector3.UP, -yaw)
 	_needs_recenter = false
