@@ -55,8 +55,15 @@ func _ready() -> void:
 ## Floating text in front of the eyes (readable in both eyes in the headset).
 func show_message(text: String, seconds := 4.0) -> void:
 	_msg.text = text
-	_msg.modulate.a = 1.0
+	_msg.visible = true
+	_set_msg_alpha(1.0)
 	_msg_timer = seconds
+
+
+## Text and its black outline fade together (fading only the text left a dark ghost behind).
+func _set_msg_alpha(a: float) -> void:
+	_msg.modulate.a = a
+	_msg.outline_modulate.a = a * 0.9
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -75,7 +82,9 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	if _msg_timer > 0.0:
 		_msg_timer -= delta
-		_msg.modulate.a = clampf(_msg_timer / 0.8, 0.0, 1.0)
+		_set_msg_alpha(clampf(_msg_timer / 0.8, 0.0, 1.0))
+		if _msg_timer <= 0.0:
+			_msg.visible = false
 
 	if Input.is_action_just_pressed("interact") and _target and is_instance_valid(_target):
 		var result = _target.interact(self)

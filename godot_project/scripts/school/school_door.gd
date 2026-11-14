@@ -28,6 +28,9 @@ func build(w: float, h: float, mat: Material, handle_mat: Material) -> void:
 		_snd[n] = SFX.load_sound(n)
 
 	var body := AnimatableBody3D.new()
+	# The hinge (this node) is what rotates. With sync_to_physics on, the body only follows
+	# its OWN movement, so the collision stayed shut while the door looked open.
+	body.sync_to_physics = false
 	body.position = Vector3(w * 0.5, h * 0.5, 0.0)
 	add_child(body)
 	var slab := MeshInstance3D.new()
