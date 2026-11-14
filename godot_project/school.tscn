@@ -1,0 +1,64 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/hmd_player.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/hmd_head.gd" id="2_head"]
+[ext_resource type="Script" path="res://scripts/hmd_stereo.gd" id="3_stereo"]
+[ext_resource type="Script" path="res://scripts/school/school_builder.gd" id="4_school"]
+[ext_resource type="Script" path="res://scripts/school/school_clock.gd" id="5_clock"]
+[ext_resource type="Script" path="res://scripts/school/presence_director.gd" id="6_director"]
+
+[sub_resource type="Environment" id="Env"]
+background_mode = 1
+background_color = Color(0.01, 0.012, 0.02, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.05, 0.055, 0.07, 1)
+glow_enabled = true
+glow_intensity = 0.6
+fog_enabled = true
+fog_light_color = Color(0.015, 0.017, 0.025, 1)
+fog_density = 0.035
+
+[sub_resource type="CapsuleShape3D" id="PlayerShape"]
+radius = 0.3
+height = 1.75
+
+[node name="SchoolLevel" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env")
+
+[node name="School" type="Node3D" parent="."]
+script = ExtResource("4_school")
+
+[node name="SchoolClock" type="Node" parent="."]
+script = ExtResource("5_clock")
+
+[node name="Player" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.75, 0.95, 35.25)
+script = ExtResource("1_player")
+
+[node name="Shape" type="CollisionShape3D" parent="Player"]
+shape = SubResource("PlayerShape")
+
+[node name="Head" type="Node3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
+script = ExtResource("2_head")
+
+[node name="Camera3D" type="Camera3D" parent="Player/Head"]
+current = true
+fov = 80.0
+near = 0.05
+
+[node name="Flashlight" type="SpotLight3D" parent="Player/Head"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.15, -0.15, 0)
+light_color = Color(1, 0.93, 0.8, 1)
+light_energy = 4.0
+shadow_enabled = true
+spot_range = 18.0
+spot_angle = 24.0
+
+[node name="PresenceDirector" type="Node" parent="."]
+script = ExtResource("6_director")
+
+[node name="HMDStereo" type="CanvasLayer" parent="."]
+script = ExtResource("3_stereo")
