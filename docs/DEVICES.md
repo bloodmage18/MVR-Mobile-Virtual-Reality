@@ -102,15 +102,28 @@ Thermals: **not measured**.
 ### Restrictions
 
 - **No NVENC** on the MX130. Hardware H.264 encoding has to use Quick Sync on the UHD 620.
-- **Optimus:** Desktop Duplication (`ddagrab`) fails because ffmpeg runs on the MX130 while the screen belongs to the UHD 620.
+- **Optimus:** Desktop Duplication (`ddagrab`) fails because ffmpeg runs on the MX130 while the screen belongs to the UHD 620. Setting ffmpeg to Power saving in Windows Graphics settings does not fix it. [TEST, 2026-11-15]
 - `gdigrab` captures a screen region. It is slow, and it picks up any window that covers the game. The 125% scaling also shifts coordinates.
-- Which GPU Godot itself renders on (MX130 or UHD 620) has not been checked.
+- **Godot renders on the UHD 620, not the MX130.** NVIDIA driver 582.28 does not register its Vulkan driver for the MX130, so Godot's Vulkan only sees Intel and `--gpu-index 1` does nothing. Workaround: set `VK_ADD_DRIVER_FILES` to NVIDIA's `nv-vk64.json` in the driver store (its folder name changes with every driver update); a clean NVIDIA driver reinstall should fix the registration. [TEST, 2026-11-15]
+- **Window capture breaks when the game renders on the MX130** (see the GPU table below), so the current capture pipeline effectively forces Intel rendering.
 - Godot Web export runs as "OpenGL ES 3.0 (WebGL 2.0) - Compatibility", Emscripten 4.0.20, **single-threaded, no GDExtension**. `index.wasm` is ~39.5 MB [TEST].
 - No single Python interpreter has every package. The `.venv` has fastapi/uvicorn/cryptography/psutil; system Python 3.14 has yt-dlp. The server runs in `.venv` and calls yt-dlp as a subprocess.
 - The console uses a non-UTF-8 legacy code page, so printing JSON can raise `UnicodeEncodeError`. Set `PYTHONIOENCODING=utf-8`.
 - Only one server can hold port 8443: phone_host and the VR browser cannot run together.
 - The Brave sign-in window and the VR browser server cannot run together, because both lock the same profile.
 - **Use a dedicated Brave profile with no personal accounts signed in.** The access key grants control of that browser session.
+
+### MX130 vs UHD 620 for rendering [TEST, 2026-11-15, school level]
+
+| Measurement | MX130 | UHD 620 |
+|---|---|---|
+| Render speed, vsync off | 125–145 fps | 55–61 fps |
+| Godot reads back each frame (blocking `get_image`) | ~37 fps | ~21 fps |
+| Godot reads back each frame (async `texture_get_data_async`) | ~92 fps; steady 60 when capped (278 MB/s) | 52–61 fps |
+| Window capture (`gfxcapture`) of the game window | Vulkan: 4 frames in 6 s (~17 fps with vsync off); D3D12: ffmpeg cannot open it; OpenGL: 1 frame | 52 fps |
+
+**Conclusion:** the MX130 renders over twice as fast, but only a "direct push" pipeline can use it: Godot reads back each finished frame asynchronously and pipes raw frames to ffmpeg, which still encodes on Quick Sync. That skips window capture, lets the game window stay hidden, and leaves the Intel chip only the encoding (planned as Phase 5 in `home_space/PLAN.md`).
+**Also noted:** many desktop apps (Start menu, Notepad, VS Code) run on the MX130, suggesting the NVIDIA Control Panel global preference is "High-performance". "Auto-select" with the NVIDIA chip chosen only for Godot would save heat and battery (not yet changed).
 
 ### Issues faced
 
