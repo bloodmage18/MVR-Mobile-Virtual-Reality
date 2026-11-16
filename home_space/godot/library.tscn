@@ -1,0 +1,485 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/hmd_player.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/hmd_head.gd" id="2_head"]
+[ext_resource type="Script" path="res://scripts/hmd_stereo.gd" id="3_stereo"]
+[ext_resource type="PackedScene" path="res://floors/floor_1_media.tscn" id="f1"]
+[ext_resource type="PackedScene" path="res://floors/floor_2_books_gallery.tscn" id="f2"]
+[ext_resource type="PackedScene" path="res://floors/floor_3_cinema.tscn" id="f3"]
+
+[sub_resource type="Environment" id="Env"]
+background_mode = 1
+background_color = Color(0.06, 0.06, 0.08, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.45, 0.42, 0.38, 1)
+ambient_light_energy = 0.5
+tonemap_mode = 2
+
+[sub_resource type="StandardMaterial3D" id="Floor"]
+albedo_color = Color(0.36, 0.26, 0.18, 1)
+roughness = 0.75
+
+[sub_resource type="StandardMaterial3D" id="Wall"]
+albedo_color = Color(0.8, 0.76, 0.68, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="Step"]
+albedo_color = Color(0.3, 0.22, 0.16, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="Rail"]
+albedo_color = Color(0.15, 0.12, 0.1, 1)
+metallic = 0.3
+
+[sub_resource type="BoxShape3D" id="RampShape"]
+size = Vector3(2, 0.2, 4.0311)
+
+[sub_resource type="CapsuleShape3D" id="PlayerShape"]
+radius = 0.3
+height = 1.75
+
+[node name="Library" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env")
+
+[node name="Shell" type="Node3D" parent="."]
+
+[node name="Ground" type="CSGBox3D" parent="Shell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+use_collision = true
+size = Vector3(20.6, 0.2, 16.6)
+material = SubResource("Floor")
+
+[node name="Slab2Main" type="CSGBox3D" parent="Shell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 3.9, 0)
+use_collision = true
+size = Vector3(16, 0.2, 16)
+material = SubResource("Floor")
+
+[node name="Slab2East" type="CSGBox3D" parent="Shell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 3.9, 3.25)
+use_collision = true
+size = Vector3(4, 0.2, 9.5)
+material = SubResource("Floor")
+
+[node name="Slab3Main" type="CSGBox3D" parent="Shell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 7.9, 0)
+use_collision = true
+size = Vector3(16, 0.2, 16)
+material = SubResource("Floor")
+
+[node name="Slab3East" type="CSGBox3D" parent="Shell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 7.9, 3.25)
+use_collision = true
+size = Vector3(4, 0.2, 9.5)
+material = SubResource("Floor")
+
+[node name="Roof" type="CSGBox3D" parent="Shell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 12.4, 0)
+size = Vector3(20.6, 0.2, 16.6)
+material = SubResource("Wall")
+
+[node name="WallNorth" type="CSGBox3D" parent="Shell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.25, -8.15)
+use_collision = true
+size = Vector3(20.6, 12.5, 0.3)
+material = SubResource("Wall")
+
+[node name="WallSouth" type="CSGBox3D" parent="Shell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.25, 8.15)
+use_collision = true
+size = Vector3(20.6, 12.5, 0.3)
+material = SubResource("Wall")
+
+[node name="WallEast" type="CSGBox3D" parent="Shell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.15, 6.25, 0)
+use_collision = true
+size = Vector3(0.3, 12.5, 16.6)
+material = SubResource("Wall")
+
+[node name="WallWest" type="CSGBox3D" parent="Shell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.15, 6.25, 0)
+use_collision = true
+size = Vector3(0.3, 12.5, 16.6)
+material = SubResource("Wall")
+
+[node name="Stairs" type="Node3D" parent="."]
+
+[node name="StairwellWall" type="CSGBox3D" parent="Stairs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.925, 6.25, -4.75)
+use_collision = true
+size = Vector3(0.15, 12.5, 6.5)
+material = SubResource("Wall")
+
+[node name="Spine" type="CSGBox3D" parent="Stairs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 4.55, -3.25)
+use_collision = true
+size = Vector3(0.15, 9.1, 3.5)
+material = SubResource("Wall")
+
+[node name="UnderFlightClosure" type="CSGBox3D" parent="Stairs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 1.875, -1.575)
+use_collision = true
+size = Vector3(2, 3.75, 0.15)
+material = SubResource("Wall")
+
+[node name="TopRailing" type="CSGBox3D" parent="Stairs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 8.55, -1.425)
+use_collision = true
+size = Vector3(2, 1.1, 0.15)
+material = SubResource("Rail")
+
+[node name="Flight1A" type="Node3D" parent="Stairs"]
+
+[node name="Ramp" type="StaticBody3D" parent="Stairs/Flight1A"]
+transform = Transform3D(1, 0, 0, 0, 0.8682, -0.4961, 0, 0.4961, 0.8682, 9, 0.9132, -3.2996)
+
+[node name="Shape" type="CollisionShape3D" parent="Stairs/Flight1A/Ramp"]
+shape = SubResource("RampShape")
+
+[node name="Step01" type="CSGBox3D" parent="Stairs/Flight1A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.0417, -1.6458)
+size = Vector3(1.9, 0.0833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step02" type="CSGBox3D" parent="Stairs/Flight1A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.125, -1.9375)
+size = Vector3(1.9, 0.25, 0.2917)
+material = SubResource("Step")
+
+[node name="Step03" type="CSGBox3D" parent="Stairs/Flight1A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.2083, -2.2292)
+size = Vector3(1.9, 0.4167, 0.2917)
+material = SubResource("Step")
+
+[node name="Step04" type="CSGBox3D" parent="Stairs/Flight1A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.2917, -2.5208)
+size = Vector3(1.9, 0.5833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step05" type="CSGBox3D" parent="Stairs/Flight1A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.375, -2.8125)
+size = Vector3(1.9, 0.75, 0.2917)
+material = SubResource("Step")
+
+[node name="Step06" type="CSGBox3D" parent="Stairs/Flight1A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.4583, -3.1042)
+size = Vector3(1.9, 0.9167, 0.2917)
+material = SubResource("Step")
+
+[node name="Step07" type="CSGBox3D" parent="Stairs/Flight1A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.5417, -3.3958)
+size = Vector3(1.9, 1.0833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step08" type="CSGBox3D" parent="Stairs/Flight1A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.625, -3.6875)
+size = Vector3(1.9, 1.25, 0.2917)
+material = SubResource("Step")
+
+[node name="Step09" type="CSGBox3D" parent="Stairs/Flight1A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.7083, -3.9792)
+size = Vector3(1.9, 1.4167, 0.2917)
+material = SubResource("Step")
+
+[node name="Step10" type="CSGBox3D" parent="Stairs/Flight1A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.7917, -4.2708)
+size = Vector3(1.9, 1.5833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step11" type="CSGBox3D" parent="Stairs/Flight1A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.875, -4.5625)
+size = Vector3(1.9, 1.75, 0.2917)
+material = SubResource("Step")
+
+[node name="Step12" type="CSGBox3D" parent="Stairs/Flight1A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.9583, -4.8542)
+size = Vector3(1.9, 1.9167, 0.2917)
+material = SubResource("Step")
+
+[node name="Landing1" type="CSGBox3D" parent="Stairs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 1.9, -6.5)
+use_collision = true
+size = Vector3(4, 0.2, 3)
+material = SubResource("Floor")
+
+[node name="Flight1B" type="Node3D" parent="Stairs"]
+
+[node name="Ramp" type="StaticBody3D" parent="Stairs/Flight1B"]
+transform = Transform3D(1, 0, 0, 0, 0.8682, 0.4961, 0, -0.4961, 0.8682, 7, 2.9132, -3.2004)
+
+[node name="Shape" type="CollisionShape3D" parent="Stairs/Flight1B/Ramp"]
+shape = SubResource("RampShape")
+
+[node name="Step01" type="CSGBox3D" parent="Stairs/Flight1B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 2.0417, -4.8542)
+size = Vector3(1.9, 0.0833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step02" type="CSGBox3D" parent="Stairs/Flight1B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 2.125, -4.5625)
+size = Vector3(1.9, 0.25, 0.2917)
+material = SubResource("Step")
+
+[node name="Step03" type="CSGBox3D" parent="Stairs/Flight1B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 2.2083, -4.2708)
+size = Vector3(1.9, 0.4167, 0.2917)
+material = SubResource("Step")
+
+[node name="Step04" type="CSGBox3D" parent="Stairs/Flight1B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 2.2917, -3.9792)
+size = Vector3(1.9, 0.5833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step05" type="CSGBox3D" parent="Stairs/Flight1B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 2.375, -3.6875)
+size = Vector3(1.9, 0.75, 0.2917)
+material = SubResource("Step")
+
+[node name="Step06" type="CSGBox3D" parent="Stairs/Flight1B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 2.4583, -3.3958)
+size = Vector3(1.9, 0.9167, 0.2917)
+material = SubResource("Step")
+
+[node name="Step07" type="CSGBox3D" parent="Stairs/Flight1B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 2.5417, -3.1042)
+size = Vector3(1.9, 1.0833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step08" type="CSGBox3D" parent="Stairs/Flight1B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 2.625, -2.8125)
+size = Vector3(1.9, 1.25, 0.2917)
+material = SubResource("Step")
+
+[node name="Step09" type="CSGBox3D" parent="Stairs/Flight1B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 2.7083, -2.5208)
+size = Vector3(1.9, 1.4167, 0.2917)
+material = SubResource("Step")
+
+[node name="Step10" type="CSGBox3D" parent="Stairs/Flight1B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 2.7917, -2.2292)
+size = Vector3(1.9, 1.5833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step11" type="CSGBox3D" parent="Stairs/Flight1B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 2.875, -1.9375)
+size = Vector3(1.9, 1.75, 0.2917)
+material = SubResource("Step")
+
+[node name="Step12" type="CSGBox3D" parent="Stairs/Flight1B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 2.9583, -1.6458)
+size = Vector3(1.9, 1.9167, 0.2917)
+material = SubResource("Step")
+
+[node name="Flight2A" type="Node3D" parent="Stairs"]
+
+[node name="Ramp" type="StaticBody3D" parent="Stairs/Flight2A"]
+transform = Transform3D(1, 0, 0, 0, 0.8682, -0.4961, 0, 0.4961, 0.8682, 9, 4.9132, -3.2996)
+
+[node name="Shape" type="CollisionShape3D" parent="Stairs/Flight2A/Ramp"]
+shape = SubResource("RampShape")
+
+[node name="Step01" type="CSGBox3D" parent="Stairs/Flight2A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 4.0417, -1.6458)
+size = Vector3(1.9, 0.0833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step02" type="CSGBox3D" parent="Stairs/Flight2A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 4.125, -1.9375)
+size = Vector3(1.9, 0.25, 0.2917)
+material = SubResource("Step")
+
+[node name="Step03" type="CSGBox3D" parent="Stairs/Flight2A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 4.2083, -2.2292)
+size = Vector3(1.9, 0.4167, 0.2917)
+material = SubResource("Step")
+
+[node name="Step04" type="CSGBox3D" parent="Stairs/Flight2A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 4.2917, -2.5208)
+size = Vector3(1.9, 0.5833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step05" type="CSGBox3D" parent="Stairs/Flight2A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 4.375, -2.8125)
+size = Vector3(1.9, 0.75, 0.2917)
+material = SubResource("Step")
+
+[node name="Step06" type="CSGBox3D" parent="Stairs/Flight2A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 4.4583, -3.1042)
+size = Vector3(1.9, 0.9167, 0.2917)
+material = SubResource("Step")
+
+[node name="Step07" type="CSGBox3D" parent="Stairs/Flight2A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 4.5417, -3.3958)
+size = Vector3(1.9, 1.0833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step08" type="CSGBox3D" parent="Stairs/Flight2A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 4.625, -3.6875)
+size = Vector3(1.9, 1.25, 0.2917)
+material = SubResource("Step")
+
+[node name="Step09" type="CSGBox3D" parent="Stairs/Flight2A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 4.7083, -3.9792)
+size = Vector3(1.9, 1.4167, 0.2917)
+material = SubResource("Step")
+
+[node name="Step10" type="CSGBox3D" parent="Stairs/Flight2A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 4.7917, -4.2708)
+size = Vector3(1.9, 1.5833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step11" type="CSGBox3D" parent="Stairs/Flight2A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 4.875, -4.5625)
+size = Vector3(1.9, 1.75, 0.2917)
+material = SubResource("Step")
+
+[node name="Step12" type="CSGBox3D" parent="Stairs/Flight2A"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 4.9583, -4.8542)
+size = Vector3(1.9, 1.9167, 0.2917)
+material = SubResource("Step")
+
+[node name="Landing2" type="CSGBox3D" parent="Stairs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 5.9, -6.5)
+use_collision = true
+size = Vector3(4, 0.2, 3)
+material = SubResource("Floor")
+
+[node name="Flight2B" type="Node3D" parent="Stairs"]
+
+[node name="Ramp" type="StaticBody3D" parent="Stairs/Flight2B"]
+transform = Transform3D(1, 0, 0, 0, 0.8682, 0.4961, 0, -0.4961, 0.8682, 7, 6.9132, -3.2004)
+
+[node name="Shape" type="CollisionShape3D" parent="Stairs/Flight2B/Ramp"]
+shape = SubResource("RampShape")
+
+[node name="Step01" type="CSGBox3D" parent="Stairs/Flight2B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 6.0417, -4.8542)
+size = Vector3(1.9, 0.0833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step02" type="CSGBox3D" parent="Stairs/Flight2B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 6.125, -4.5625)
+size = Vector3(1.9, 0.25, 0.2917)
+material = SubResource("Step")
+
+[node name="Step03" type="CSGBox3D" parent="Stairs/Flight2B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 6.2083, -4.2708)
+size = Vector3(1.9, 0.4167, 0.2917)
+material = SubResource("Step")
+
+[node name="Step04" type="CSGBox3D" parent="Stairs/Flight2B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 6.2917, -3.9792)
+size = Vector3(1.9, 0.5833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step05" type="CSGBox3D" parent="Stairs/Flight2B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 6.375, -3.6875)
+size = Vector3(1.9, 0.75, 0.2917)
+material = SubResource("Step")
+
+[node name="Step06" type="CSGBox3D" parent="Stairs/Flight2B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 6.4583, -3.3958)
+size = Vector3(1.9, 0.9167, 0.2917)
+material = SubResource("Step")
+
+[node name="Step07" type="CSGBox3D" parent="Stairs/Flight2B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 6.5417, -3.1042)
+size = Vector3(1.9, 1.0833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step08" type="CSGBox3D" parent="Stairs/Flight2B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 6.625, -2.8125)
+size = Vector3(1.9, 1.25, 0.2917)
+material = SubResource("Step")
+
+[node name="Step09" type="CSGBox3D" parent="Stairs/Flight2B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 6.7083, -2.5208)
+size = Vector3(1.9, 1.4167, 0.2917)
+material = SubResource("Step")
+
+[node name="Step10" type="CSGBox3D" parent="Stairs/Flight2B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 6.7917, -2.2292)
+size = Vector3(1.9, 1.5833, 0.2917)
+material = SubResource("Step")
+
+[node name="Step11" type="CSGBox3D" parent="Stairs/Flight2B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 6.875, -1.9375)
+size = Vector3(1.9, 1.75, 0.2917)
+material = SubResource("Step")
+
+[node name="Step12" type="CSGBox3D" parent="Stairs/Flight2B"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 6.9583, -1.6458)
+size = Vector3(1.9, 1.9167, 0.2917)
+material = SubResource("Step")
+
+[node name="StairLight1" type="OmniLight3D" parent="Stairs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 3.3, -6.5)
+light_color = Color(1, 0.9, 0.75, 1)
+light_energy = 1.2
+omni_range = 7.0
+
+[node name="StairLight2" type="OmniLight3D" parent="Stairs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 7.3, -6.5)
+light_color = Color(1, 0.9, 0.75, 1)
+light_energy = 1.2
+omni_range = 7.0
+
+[node name="StairLight3" type="OmniLight3D" parent="Stairs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 11.3, -6.5)
+light_color = Color(1, 0.9, 0.75, 1)
+light_energy = 1.2
+omni_range = 7.0
+
+[node name="StairSign1" type="Label3D" parent="Stairs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 2.9, -1.35)
+pixel_size = 0.003
+text = "UP  ▲  Floor 2: Books & Gallery   ·   Floor 3: Cinema"
+font_size = 48
+outline_size = 8
+modulate = Color(1, 0.95, 0.85, 1)
+
+[node name="StairSign2" type="Label3D" parent="Stairs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6.9, -1.35)
+pixel_size = 0.003
+text = "UP  ▲  Floor 3: Cinema        DOWN  ▼  Floor 1: Browsers & Media"
+font_size = 48
+outline_size = 8
+modulate = Color(1, 0.95, 0.85, 1)
+
+[node name="StairSign3" type="Label3D" parent="Stairs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 10.9, -1.35)
+pixel_size = 0.003
+text = "DOWN  ▼  Floor 2: Books & Gallery   ·   Floor 1: Browsers & Media"
+font_size = 48
+outline_size = 8
+modulate = Color(1, 0.95, 0.85, 1)
+
+[node name="Floor1" parent="." instance=ExtResource("f1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+
+[node name="Floor2" parent="." instance=ExtResource("f2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
+
+[node name="Floor3" parent="." instance=ExtResource("f3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 0)
+
+[node name="Player" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 6)
+script = ExtResource("1_player")
+
+[node name="Shape" type="CollisionShape3D" parent="Player"]
+shape = SubResource("PlayerShape")
+
+[node name="Head" type="Node3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
+script = ExtResource("2_head")
+
+[node name="Camera3D" type="Camera3D" parent="Player/Head"]
+current = true
+fov = 80.0
+near = 0.05
+
+[node name="HMDStereo" type="CanvasLayer" parent="."]
+script = ExtResource("3_stereo")

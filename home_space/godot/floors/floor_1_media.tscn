@@ -1,0 +1,1239 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/stations/browser_panel.gd" id="browser_panel"]
+
+[sub_resource type="StandardMaterial3D" id="Wood"]
+albedo_color = Color(0.42, 0.27, 0.16, 1)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="WoodLight"]
+albedo_color = Color(0.66, 0.5, 0.34, 1)
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="DarkPanel"]
+albedo_color = Color(0.11, 0.13, 0.17, 1)
+roughness = 0.5
+metallic = 0.2
+
+[sub_resource type="StandardMaterial3D" id="Screen"]
+albedo_color = Color(0.03, 0.05, 0.08, 1)
+roughness = 0.3
+emission_enabled = true
+emission = Color(0.08, 0.16, 0.28, 1)
+emission_energy_multiplier = 0.8
+
+[sub_resource type="StandardMaterial3D" id="Fabric"]
+albedo_color = Color(0.16, 0.38, 0.4, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="FabricWarm"]
+albedo_color = Color(0.68, 0.33, 0.2, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="Cork"]
+albedo_color = Color(0.62, 0.45, 0.28, 1)
+roughness = 1
+
+[sub_resource type="StandardMaterial3D" id="Partition"]
+albedo_color = Color(0.36, 0.42, 0.38, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Plant"]
+albedo_color = Color(0.2, 0.45, 0.2, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Glow"]
+albedo_color = Color(1, 0.9, 0.7, 1)
+roughness = 0.5
+emission_enabled = true
+emission = Color(1, 0.82, 0.55, 1)
+emission_energy_multiplier = 2
+
+[sub_resource type="StandardMaterial3D" id="BookRed"]
+albedo_color = Color(0.55, 0.14, 0.12, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="BookBlue"]
+albedo_color = Color(0.15, 0.25, 0.5, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="BookGreen"]
+albedo_color = Color(0.2, 0.4, 0.25, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="BookMustard"]
+albedo_color = Color(0.8, 0.6, 0.2, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="Paper"]
+albedo_color = Color(0.92, 0.89, 0.8, 1)
+roughness = 0.9
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_1"]
+material = SubResource("Glow")
+top_radius = 0.32
+bottom_radius = 0.32
+height = 0.05
+radial_segments = 16
+rings = 1
+
+[sub_resource type="BoxMesh" id="BoxMesh_2"]
+material = SubResource("Wood")
+size = Vector3(2.5, 2.7, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_3"]
+material = SubResource("WoodLight")
+size = Vector3(1.04, 2.4, 0.05)
+
+[sub_resource type="BoxMesh" id="BoxMesh_4"]
+material = SubResource("Screen")
+size = Vector3(0.6, 0.8, 0.01)
+
+[sub_resource type="BoxMesh" id="BoxMesh_5"]
+material = SubResource("DarkPanel")
+size = Vector3(0.04, 0.35, 0.04)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_6"]
+material = SubResource("BookRed")
+size = Vector2(2.2, 1.1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_7"]
+material = SubResource("WoodLight")
+size = Vector3(3.35, 0.05, 0.82)
+
+[sub_resource type="BoxMesh" id="BoxMesh_8"]
+material = SubResource("WoodLight")
+size = Vector3(3, 1.05, 0.02)
+
+[sub_resource type="BoxMesh" id="BoxMesh_9"]
+material = SubResource("DarkPanel")
+size = Vector3(0.6, 0.38, 0.04)
+
+[sub_resource type="BoxMesh" id="BoxMesh_10"]
+material = SubResource("DarkPanel")
+size = Vector3(0.06, 0.1, 0.06)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_11"]
+material = SubResource("DarkPanel")
+top_radius = 0.08
+bottom_radius = 0.1
+height = 0.03
+radial_segments = 16
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_12"]
+material = SubResource("DarkPanel")
+top_radius = 0.015
+bottom_radius = 0.015
+height = 0.36
+radial_segments = 16
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_13"]
+material = SubResource("Glow")
+top_radius = 0.08
+bottom_radius = 0.15
+height = 0.14
+radial_segments = 16
+rings = 1
+
+[sub_resource type="BoxMesh" id="BoxMesh_14"]
+material = SubResource("WoodLight")
+size = Vector3(2.06, 0.03, 0.84)
+
+[sub_resource type="BoxMesh" id="BoxMesh_15"]
+material = SubResource("DarkPanel")
+size = Vector3(0.6, 0.02, 0.2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_16"]
+material = SubResource("DarkPanel")
+size = Vector3(0.12, 0.1, 0.05)
+
+[sub_resource type="BoxMesh" id="BoxMesh_17"]
+material = SubResource("DarkPanel")
+size = Vector3(1.92, 1.12, 0.06)
+
+[sub_resource type="QuadMesh" id="QuadMesh_18"]
+material = SubResource("Screen")
+size = Vector2(1.8, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_19"]
+material = SubResource("Fabric")
+size = Vector2(1.4, 0.8)
+
+[sub_resource type="BoxMesh" id="BoxMesh_20"]
+material = SubResource("WoodLight")
+size = Vector3(1.76, 0.03, 0.64)
+
+[sub_resource type="BoxMesh" id="BoxMesh_21"]
+material = SubResource("DarkPanel")
+size = Vector3(1.72, 1.08, 0.1)
+
+[sub_resource type="QuadMesh" id="QuadMesh_22"]
+material = SubResource("Screen")
+size = Vector2(1.6, 0.9)
+
+[sub_resource type="BoxMesh" id="BoxMesh_23"]
+material = SubResource("Wood")
+size = Vector3(2.3, 1.4, 0.04)
+
+[sub_resource type="BoxMesh" id="BoxMesh_24"]
+material = SubResource("Cork")
+size = Vector3(2.15, 1.25, 0.02)
+
+[sub_resource type="BoxMesh" id="BoxMesh_25"]
+material = SubResource("Paper")
+size = Vector3(0.42, 0.32, 0.005)
+
+[sub_resource type="BoxMesh" id="BoxMesh_26"]
+material = SubResource("BookMustard")
+size = Vector3(0.42, 0.32, 0.005)
+
+[sub_resource type="BoxMesh" id="BoxMesh_27"]
+material = SubResource("BookBlue")
+size = Vector3(0.42, 0.32, 0.005)
+
+[sub_resource type="BoxMesh" id="BoxMesh_28"]
+material = SubResource("BookGreen")
+size = Vector3(0.42, 0.32, 0.005)
+
+[sub_resource type="BoxMesh" id="BoxMesh_29"]
+material = SubResource("BookRed")
+size = Vector3(0.43, 0.36, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_30"]
+material = SubResource("BookBlue")
+size = Vector3(0.28, 0.3, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_31"]
+material = SubResource("BookGreen")
+size = Vector3(0.48, 0.4, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_32"]
+material = SubResource("BookMustard")
+size = Vector3(0.33, 0.33, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_33"]
+material = SubResource("Paper")
+size = Vector3(0.38, 0.38, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_34"]
+material = SubResource("BookGreen")
+size = Vector3(0.36, 0.38, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_35"]
+material = SubResource("BookMustard")
+size = Vector3(0.48, 0.32, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_36"]
+material = SubResource("Paper")
+size = Vector3(0.28, 0.4, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_37"]
+material = SubResource("BookRed")
+size = Vector3(0.43, 0.35, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_38"]
+material = SubResource("BookBlue")
+size = Vector3(0.4, 0.3, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_39"]
+material = SubResource("Fabric")
+size = Vector3(0.45, 0.5, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_40"]
+material = SubResource("FabricWarm")
+size = Vector3(0.45, 0.5, 0.06)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_41"]
+material = SubResource("DarkPanel")
+top_radius = 0.1
+bottom_radius = 0.12
+height = 0.03
+radial_segments = 16
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_42"]
+material = SubResource("Glow")
+top_radius = 0.1
+bottom_radius = 0.18
+height = 0.18
+radial_segments = 16
+rings = 1
+
+[sub_resource type="BoxMesh" id="BoxMesh_43"]
+material = SubResource("Paper")
+size = Vector3(0.4, 0.02, 0.28)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_44"]
+material = SubResource("BookRed")
+size = Vector2(4.2, 3.2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_45"]
+material = SubResource("FabricWarm")
+size = Vector3(1.1, 0.12, 0.7)
+
+[sub_resource type="BoxMesh" id="BoxMesh_46"]
+material = SubResource("FabricWarm")
+size = Vector3(0.7, 0.12, 0.95)
+
+[sub_resource type="BoxMesh" id="BoxMesh_47"]
+material = SubResource("BookBlue")
+size = Vector3(0.3, 0.015, 0.22)
+
+[sub_resource type="BoxMesh" id="BoxMesh_48"]
+material = SubResource("BookMustard")
+size = Vector3(0.3, 0.015, 0.22)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_49"]
+material = SubResource("DarkPanel")
+top_radius = 0.18
+bottom_radius = 0.18
+height = 0.04
+radial_segments = 16
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_51"]
+material = SubResource("Glow")
+top_radius = 0.16
+bottom_radius = 0.26
+height = 0.3
+radial_segments = 16
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_52"]
+material = SubResource("Plant")
+top_radius = 0
+bottom_radius = 0.42
+height = 0.8
+radial_segments = 8
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_53"]
+material = SubResource("Plant")
+top_radius = 0
+bottom_radius = 0.3
+height = 0.6
+radial_segments = 8
+rings = 1
+
+[node name="Floor1" type="Node3D"]
+
+[node name="Lighting" type="Node3D" parent="."]
+
+[node name="EntranceLight" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.3, 4.5)
+light_color = Color(1, 0.85, 0.65, 1)
+light_energy = 2.0
+omni_range = 8
+omni_attenuation = 0.8
+
+[node name="BrowserLightSouth" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.2, 3.3, 3.3)
+light_color = Color(1, 0.85, 0.65, 1)
+light_energy = 1.9
+omni_range = 8
+omni_attenuation = 0.8
+
+[node name="BrowserLightNorth" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.2, 3.3, -4.3)
+light_color = Color(1, 0.85, 0.65, 1)
+light_energy = 1.9
+omni_range = 8
+omni_attenuation = 0.8
+
+[node name="NorthLight" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 3.3, -5)
+light_color = Color(1, 0.85, 0.65, 1)
+light_energy = 1.8
+omni_range = 8
+omni_attenuation = 0.8
+
+[node name="EastLight" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 3.3, -3.5)
+light_color = Color(1, 0.85, 0.65, 1)
+light_energy = 1.7
+omni_range = 8
+omni_attenuation = 0.8
+
+[node name="LoungeLight" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.5, 3.2, 5.6)
+light_color = Color(1, 0.85, 0.65, 1)
+light_energy = 1.8
+omni_range = 8
+omni_attenuation = 0.8
+
+[node name="Fixtures" type="Node3D" parent="Lighting"]
+
+[node name="Fixture1" type="MeshInstance3D" parent="Lighting/Fixtures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.77, 4.5)
+mesh = SubResource("CylinderMesh_1")
+
+[node name="Fixture2" type="MeshInstance3D" parent="Lighting/Fixtures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.2, 3.77, 3.3)
+mesh = SubResource("CylinderMesh_1")
+
+[node name="Fixture3" type="MeshInstance3D" parent="Lighting/Fixtures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.2, 3.77, -4.3)
+mesh = SubResource("CylinderMesh_1")
+
+[node name="Fixture4" type="MeshInstance3D" parent="Lighting/Fixtures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 3.77, -5)
+mesh = SubResource("CylinderMesh_1")
+
+[node name="Fixture5" type="MeshInstance3D" parent="Lighting/Fixtures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 3.77, -3.5)
+mesh = SubResource("CylinderMesh_1")
+
+[node name="Fixture6" type="MeshInstance3D" parent="Lighting/Fixtures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.5, 3.77, 5.6)
+mesh = SubResource("CylinderMesh_1")
+
+[node name="Entrance" type="Node3D" parent="."]
+
+[node name="DoorFrame" type="MeshInstance3D" parent="Entrance"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, 7.87)
+mesh = SubResource("BoxMesh_2")
+
+[node name="DoorLeft" type="MeshInstance3D" parent="Entrance"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, 1.22, 7.83)
+mesh = SubResource("BoxMesh_3")
+
+[node name="DoorRight" type="MeshInstance3D" parent="Entrance"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, 1.22, 7.83)
+mesh = SubResource("BoxMesh_3")
+
+[node name="WindowLeft" type="MeshInstance3D" parent="Entrance"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, 1.75, 7.8)
+mesh = SubResource("BoxMesh_4")
+
+[node name="WindowRight" type="MeshInstance3D" parent="Entrance"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, 1.75, 7.8)
+mesh = SubResource("BoxMesh_4")
+
+[node name="HandleLeft" type="MeshInstance3D" parent="Entrance"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.12, 1.05, 7.79)
+mesh = SubResource("BoxMesh_5")
+
+[node name="HandleRight" type="MeshInstance3D" parent="Entrance"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.12, 1.05, 7.79)
+mesh = SubResource("BoxMesh_5")
+
+[node name="EntranceSign" type="Label3D" parent="Entrance"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 2.95, 7.84)
+pixel_size = 0.004
+modulate = Color(1, 0.95, 0.85, 1)
+text = "ENTRANCE"
+font_size = 72
+outline_size = 14
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="WelcomeMat" type="MeshInstance3D" parent="Entrance"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.006, 7.25)
+mesh = SubResource("PlaneMesh_6")
+
+[node name="InfoDesk" type="Node3D" parent="."]
+
+[node name="Counter" type="CSGBox3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.525, 2)
+use_collision = true
+size = Vector3(3.2, 1.05, 0.7)
+material = SubResource("Wood")
+
+[node name="CounterTop" type="MeshInstance3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.075, 2)
+mesh = SubResource("BoxMesh_7")
+
+[node name="CounterLabel" type="Label3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.62, 2.36)
+pixel_size = 0.004
+modulate = Color(1, 0.95, 0.85, 1)
+text = "INFORMATION  ·  HELP"
+font_size = 64
+outline_size = 14
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="SignWall" type="CSGBox3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0.6)
+use_collision = true
+size = Vector3(4.4, 3.4, 0.15)
+material = SubResource("DarkPanel")
+
+[node name="LibrarySign" type="Label3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.85, 0.69)
+pixel_size = 0.006
+modulate = Color(1, 0.86, 0.55, 1)
+text = "LIBRARY"
+font_size = 96
+outline_size = 18
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="DirectoryBoard" type="MeshInstance3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.85, 0.68)
+mesh = SubResource("BoxMesh_8")
+
+[node name="DirectoryText" type="Label3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.85, 0.7)
+pixel_size = 0.003
+modulate = Color(0.12, 0.09, 0.06, 1)
+text = "FLOOR DIRECTORY\n1  Browsers & Media  (here)\n2  Books & Gallery\n3  Cinema"
+font_size = 56
+outline_size = 0
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="StaffMonitor" type="MeshInstance3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 1.35, 1.85)
+mesh = SubResource("BoxMesh_9")
+
+[node name="StaffMonitorNeck" type="MeshInstance3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 1.13, 1.85)
+mesh = SubResource("BoxMesh_10")
+
+[node name="DeskLampBase" type="MeshInstance3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1, 1.11, 2.05)
+mesh = SubResource("CylinderMesh_11")
+
+[node name="DeskLampStem" type="MeshInstance3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1, 1.3, 2.05)
+mesh = SubResource("CylinderMesh_12")
+
+[node name="DeskLampShade" type="MeshInstance3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1, 1.5, 2.05)
+mesh = SubResource("CylinderMesh_13")
+
+[node name="StaffChairSeat" type="CSGBox3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 0.225, 1.15)
+use_collision = true
+size = Vector3(0.5, 0.45, 0.5)
+material = SubResource("Fabric")
+
+[node name="StaffChairBack" type="CSGBox3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 0.7, 0.95)
+use_collision = true
+size = Vector3(0.5, 0.5, 0.08)
+material = SubResource("Fabric")
+
+[node name="SignWallNorthFace" type="CSGBox3D" parent="InfoDesk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0.52)
+size = Vector3(4.2, 0.6, 0.01)
+material = SubResource("WoodLight")
+
+[node name="ArrivalSign" type="Label3D" parent="InfoDesk"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, 0.51)
+pixel_size = 0.004
+modulate = Color(1, 0.95, 0.85, 1)
+text = "◄ LOUNGE      BROWSERS ►"
+font_size = 72
+outline_size = 14
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="Stations" type="Node3D" parent="."]
+
+[node name="Station_Browser_1" type="Node3D" parent="Stations"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -9.75, 1.55, -6.2)
+script = ExtResource("browser_panel")
+
+[node name="Desk" type="CSGBox3D" parent="Stations/Station_Browser_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.075, 0.25)
+use_collision = true
+size = Vector3(2, 0.95, 0.8)
+material = SubResource("Wood")
+
+[node name="DeskTop" type="MeshInstance3D" parent="Stations/Station_Browser_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.59, 0.25)
+mesh = SubResource("BoxMesh_14")
+
+[node name="Keyboard" type="MeshInstance3D" parent="Stations/Station_Browser_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.565, 0.45)
+mesh = SubResource("BoxMesh_15")
+
+[node name="Neck" type="MeshInstance3D" parent="Stations/Station_Browser_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.55, -0.02)
+mesh = SubResource("BoxMesh_16")
+
+[node name="Bezel" type="MeshInstance3D" parent="Stations/Station_Browser_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("BoxMesh_17")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Browser_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.035)
+mesh = SubResource("QuadMesh_18")
+
+[node name="Placeholder" type="Label3D" parent="Stations/Station_Browser_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.045)
+pixel_size = 0.004
+modulate = Color(0.6, 0.75, 0.9, 1)
+text = "Web Browser\n(coming soon)"
+font_size = 48
+outline_size = 0
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="Label" type="Label3D" parent="Stations/Station_Browser_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.74, 0.04)
+pixel_size = 0.004
+modulate = Color(1, 0.95, 0.85, 1)
+text = "BROWSER 1"
+font_size = 72
+outline_size = 14
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="StandMat" type="MeshInstance3D" parent="Stations/Station_Browser_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.544, 1.5)
+mesh = SubResource("PlaneMesh_19")
+
+[node name="ViewSpot" type="Marker3D" parent="Stations/Station_Browser_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 1.5)
+
+[node name="Station_Browser_2" type="Node3D" parent="Stations"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -9.75, 1.55, -2.4)
+script = ExtResource("browser_panel")
+
+[node name="Desk" type="CSGBox3D" parent="Stations/Station_Browser_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.075, 0.25)
+use_collision = true
+size = Vector3(2, 0.95, 0.8)
+material = SubResource("Wood")
+
+[node name="DeskTop" type="MeshInstance3D" parent="Stations/Station_Browser_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.59, 0.25)
+mesh = SubResource("BoxMesh_14")
+
+[node name="Keyboard" type="MeshInstance3D" parent="Stations/Station_Browser_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.565, 0.45)
+mesh = SubResource("BoxMesh_15")
+
+[node name="Neck" type="MeshInstance3D" parent="Stations/Station_Browser_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.55, -0.02)
+mesh = SubResource("BoxMesh_16")
+
+[node name="Bezel" type="MeshInstance3D" parent="Stations/Station_Browser_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("BoxMesh_17")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Browser_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.035)
+mesh = SubResource("QuadMesh_18")
+
+[node name="Placeholder" type="Label3D" parent="Stations/Station_Browser_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.045)
+pixel_size = 0.004
+modulate = Color(0.6, 0.75, 0.9, 1)
+text = "Web Browser\n(coming soon)"
+font_size = 48
+outline_size = 0
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="Label" type="Label3D" parent="Stations/Station_Browser_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.74, 0.04)
+pixel_size = 0.004
+modulate = Color(1, 0.95, 0.85, 1)
+text = "BROWSER 2"
+font_size = 72
+outline_size = 14
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="StandMat" type="MeshInstance3D" parent="Stations/Station_Browser_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.544, 1.5)
+mesh = SubResource("PlaneMesh_19")
+
+[node name="ViewSpot" type="Marker3D" parent="Stations/Station_Browser_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 1.5)
+
+[node name="Station_Browser_3" type="Node3D" parent="Stations"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -9.75, 1.55, 1.4)
+script = ExtResource("browser_panel")
+
+[node name="Desk" type="CSGBox3D" parent="Stations/Station_Browser_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.075, 0.25)
+use_collision = true
+size = Vector3(2, 0.95, 0.8)
+material = SubResource("Wood")
+
+[node name="DeskTop" type="MeshInstance3D" parent="Stations/Station_Browser_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.59, 0.25)
+mesh = SubResource("BoxMesh_14")
+
+[node name="Keyboard" type="MeshInstance3D" parent="Stations/Station_Browser_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.565, 0.45)
+mesh = SubResource("BoxMesh_15")
+
+[node name="Neck" type="MeshInstance3D" parent="Stations/Station_Browser_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.55, -0.02)
+mesh = SubResource("BoxMesh_16")
+
+[node name="Bezel" type="MeshInstance3D" parent="Stations/Station_Browser_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("BoxMesh_17")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Browser_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.035)
+mesh = SubResource("QuadMesh_18")
+
+[node name="Placeholder" type="Label3D" parent="Stations/Station_Browser_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.045)
+pixel_size = 0.004
+modulate = Color(0.6, 0.75, 0.9, 1)
+text = "Web Browser\n(coming soon)"
+font_size = 48
+outline_size = 0
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="Label" type="Label3D" parent="Stations/Station_Browser_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.74, 0.04)
+pixel_size = 0.004
+modulate = Color(1, 0.95, 0.85, 1)
+text = "BROWSER 3"
+font_size = 72
+outline_size = 14
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="StandMat" type="MeshInstance3D" parent="Stations/Station_Browser_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.544, 1.5)
+mesh = SubResource("PlaneMesh_19")
+
+[node name="ViewSpot" type="Marker3D" parent="Stations/Station_Browser_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 1.5)
+
+[node name="Station_Browser_4" type="Node3D" parent="Stations"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -9.75, 1.55, 5.2)
+script = ExtResource("browser_panel")
+
+[node name="Desk" type="CSGBox3D" parent="Stations/Station_Browser_4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.075, 0.25)
+use_collision = true
+size = Vector3(2, 0.95, 0.8)
+material = SubResource("Wood")
+
+[node name="DeskTop" type="MeshInstance3D" parent="Stations/Station_Browser_4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.59, 0.25)
+mesh = SubResource("BoxMesh_14")
+
+[node name="Keyboard" type="MeshInstance3D" parent="Stations/Station_Browser_4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.565, 0.45)
+mesh = SubResource("BoxMesh_15")
+
+[node name="Neck" type="MeshInstance3D" parent="Stations/Station_Browser_4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.55, -0.02)
+mesh = SubResource("BoxMesh_16")
+
+[node name="Bezel" type="MeshInstance3D" parent="Stations/Station_Browser_4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("BoxMesh_17")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Browser_4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.035)
+mesh = SubResource("QuadMesh_18")
+
+[node name="Placeholder" type="Label3D" parent="Stations/Station_Browser_4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.045)
+pixel_size = 0.004
+modulate = Color(0.6, 0.75, 0.9, 1)
+text = "Web Browser\n(coming soon)"
+font_size = 48
+outline_size = 0
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="Label" type="Label3D" parent="Stations/Station_Browser_4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.74, 0.04)
+pixel_size = 0.004
+modulate = Color(1, 0.95, 0.85, 1)
+text = "BROWSER 4"
+font_size = 72
+outline_size = 14
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="StandMat" type="MeshInstance3D" parent="Stations/Station_Browser_4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.544, 1.5)
+mesh = SubResource("PlaneMesh_19")
+
+[node name="ViewSpot" type="Marker3D" parent="Stations/Station_Browser_4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 1.5)
+
+[node name="Station_Misc_1" type="Node3D" parent="Stations"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.8, 1.5, -7.7)
+
+[node name="Cabinet" type="CSGBox3D" parent="Stations/Station_Misc_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.05, 0.1)
+use_collision = true
+size = Vector3(1.7, 0.9, 0.6)
+material = SubResource("Wood")
+
+[node name="CabinetTop" type="MeshInstance3D" parent="Stations/Station_Misc_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.585, 0.1)
+mesh = SubResource("BoxMesh_20")
+
+[node name="Bezel" type="MeshInstance3D" parent="Stations/Station_Misc_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.06)
+mesh = SubResource("BoxMesh_21")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Misc_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("QuadMesh_22")
+
+[node name="Placeholder" type="Label3D" parent="Stations/Station_Misc_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.01)
+pixel_size = 0.004
+modulate = Color(0.6, 0.75, 0.9, 1)
+text = "Apps & More\n(coming soon)"
+font_size = 48
+outline_size = 0
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="Label" type="Label3D" parent="Stations/Station_Misc_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.74, 0)
+pixel_size = 0.004
+modulate = Color(1, 0.95, 0.85, 1)
+text = "MEDIA KIOSK"
+font_size = 72
+outline_size = 14
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="StandMat" type="MeshInstance3D" parent="Stations/Station_Misc_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.494, 1.5)
+mesh = SubResource("PlaneMesh_19")
+
+[node name="ViewSpot" type="Marker3D" parent="Stations/Station_Misc_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 1.5)
+
+[node name="BrowserArea" type="Node3D" parent="."]
+
+[node name="Partition1" type="CSGBox3D" parent="BrowserArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.25, 0.85, -4.3)
+use_collision = true
+size = Vector3(1.3, 1.7, 0.08)
+material = SubResource("Partition")
+
+[node name="Partition2" type="CSGBox3D" parent="BrowserArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.25, 0.85, -0.5)
+use_collision = true
+size = Vector3(1.3, 1.7, 0.08)
+material = SubResource("Partition")
+
+[node name="Partition3" type="CSGBox3D" parent="BrowserArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.25, 0.85, 3.3)
+use_collision = true
+size = Vector3(1.3, 1.7, 0.08)
+material = SubResource("Partition")
+
+[node name="AreaSign" type="Label3D" parent="BrowserArea"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -9.88, 2.85, -0.5)
+pixel_size = 0.004
+modulate = Color(1, 0.95, 0.85, 1)
+text = "BROWSER TERMINALS"
+font_size = 72
+outline_size = 14
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="NorthWall" type="Node3D" parent="."]
+
+[node name="NoticeBoard" type="Node3D" parent="NorthWall"]
+
+[node name="Frame" type="MeshInstance3D" parent="NorthWall/NoticeBoard"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 1.6, -7.88)
+mesh = SubResource("BoxMesh_23")
+
+[node name="Cork" type="MeshInstance3D" parent="NorthWall/NoticeBoard"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 1.6, -7.855)
+mesh = SubResource("BoxMesh_24")
+
+[node name="Note1" type="MeshInstance3D" parent="NorthWall/NoticeBoard"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.25, 1.85, -7.84)
+mesh = SubResource("BoxMesh_25")
+
+[node name="Note2" type="MeshInstance3D" parent="NorthWall/NoticeBoard"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.65, 1.95, -7.84)
+mesh = SubResource("BoxMesh_26")
+
+[node name="Note3" type="MeshInstance3D" parent="NorthWall/NoticeBoard"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.95, 1.8, -7.84)
+mesh = SubResource("BoxMesh_25")
+
+[node name="Note4" type="MeshInstance3D" parent="NorthWall/NoticeBoard"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.1, 1.3, -7.84)
+mesh = SubResource("BoxMesh_27")
+
+[node name="Note5" type="MeshInstance3D" parent="NorthWall/NoticeBoard"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4, 1.35, -7.84)
+mesh = SubResource("BoxMesh_25")
+
+[node name="Note6" type="MeshInstance3D" parent="NorthWall/NoticeBoard"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.75, 1.3, -7.84)
+mesh = SubResource("BoxMesh_28")
+
+[node name="Title" type="Label3D" parent="NorthWall/NoticeBoard"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 2.55, -7.86)
+pixel_size = 0.004
+modulate = Color(1, 0.95, 0.85, 1)
+text = "NOTICE BOARD"
+font_size = 64
+outline_size = 14
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="MediaShelf" type="Node3D" parent="NorthWall"]
+
+[node name="Carcass" type="CSGCombiner3D" parent="NorthWall/MediaShelf"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.6, -7.675)
+use_collision = true
+
+[node name="Body" type="CSGBox3D" parent="NorthWall/MediaShelf/Carcass"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+size = Vector3(2.4, 1.2, 0.45)
+material = SubResource("Wood")
+
+[node name="Hollow" type="CSGBox3D" parent="NorthWall/MediaShelf/Carcass"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.03)
+operation = 2
+size = Vector3(2.3, 1.1, 0.42)
+material = SubResource("Wood")
+
+[node name="MidShelf" type="CSGBox3D" parent="NorthWall/MediaShelf/Carcass"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.03)
+size = Vector3(2.3, 0.04, 0.42)
+material = SubResource("WoodLight")
+
+[node name="Books1" type="MeshInstance3D" parent="NorthWall/MediaShelf"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.875, 0.23, -7.66)
+mesh = SubResource("BoxMesh_29")
+
+[node name="Books2" type="MeshInstance3D" parent="NorthWall/MediaShelf"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.49, 0.2, -7.66)
+mesh = SubResource("BoxMesh_30")
+
+[node name="Books3" type="MeshInstance3D" parent="NorthWall/MediaShelf"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.08, 0.25, -7.66)
+mesh = SubResource("BoxMesh_31")
+
+[node name="Books4" type="MeshInstance3D" parent="NorthWall/MediaShelf"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.645, 0.215, -7.66)
+mesh = SubResource("BoxMesh_32")
+
+[node name="Books5" type="MeshInstance3D" parent="NorthWall/MediaShelf"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.26, 0.24, -7.66)
+mesh = SubResource("BoxMesh_33")
+
+[node name="Books6" type="MeshInstance3D" parent="NorthWall/MediaShelf"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.91, 0.81, -7.66)
+mesh = SubResource("BoxMesh_34")
+
+[node name="Books7" type="MeshInstance3D" parent="NorthWall/MediaShelf"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.46, 0.78, -7.66)
+mesh = SubResource("BoxMesh_35")
+
+[node name="Books8" type="MeshInstance3D" parent="NorthWall/MediaShelf"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.05, 0.82, -7.66)
+mesh = SubResource("BoxMesh_36")
+
+[node name="Books9" type="MeshInstance3D" parent="NorthWall/MediaShelf"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.665, 0.795, -7.66)
+mesh = SubResource("BoxMesh_37")
+
+[node name="Books10" type="MeshInstance3D" parent="NorthWall/MediaShelf"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.22, 0.77, -7.66)
+mesh = SubResource("BoxMesh_38")
+
+[node name="Title" type="Label3D" parent="NorthWall/MediaShelf"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 1.45, -7.6)
+pixel_size = 0.004
+modulate = Color(1, 0.95, 0.85, 1)
+text = "MEDIA SHELF"
+font_size = 64
+outline_size = 14
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="ReadingTable" type="Node3D" parent="."]
+
+[node name="Table" type="CSGBox3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.375, -3.5)
+use_collision = true
+size = Vector3(2.4, 0.75, 1)
+material = SubResource("WoodLight")
+
+[node name="Chair1" type="CSGBox3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0.225, -2.75)
+use_collision = true
+size = Vector3(0.45, 0.45, 0.45)
+material = SubResource("Fabric")
+
+[node name="ChairBack1" type="MeshInstance3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0.7, -2.55)
+mesh = SubResource("BoxMesh_39")
+
+[node name="Chair2" type="CSGBox3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.225, -2.75)
+use_collision = true
+size = Vector3(0.45, 0.45, 0.45)
+material = SubResource("FabricWarm")
+
+[node name="ChairBack2" type="MeshInstance3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.7, -2.55)
+mesh = SubResource("BoxMesh_40")
+
+[node name="Chair3" type="CSGBox3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0.225, -2.75)
+use_collision = true
+size = Vector3(0.45, 0.45, 0.45)
+material = SubResource("Fabric")
+
+[node name="ChairBack3" type="MeshInstance3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0.7, -2.55)
+mesh = SubResource("BoxMesh_39")
+
+[node name="Chair4" type="CSGBox3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0.225, -4.25)
+use_collision = true
+size = Vector3(0.45, 0.45, 0.45)
+material = SubResource("FabricWarm")
+
+[node name="ChairBack4" type="MeshInstance3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0.7, -4.45)
+mesh = SubResource("BoxMesh_40")
+
+[node name="Chair5" type="CSGBox3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.225, -4.25)
+use_collision = true
+size = Vector3(0.45, 0.45, 0.45)
+material = SubResource("Fabric")
+
+[node name="ChairBack5" type="MeshInstance3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.7, -4.45)
+mesh = SubResource("BoxMesh_39")
+
+[node name="Chair6" type="CSGBox3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0.225, -4.25)
+use_collision = true
+size = Vector3(0.45, 0.45, 0.45)
+material = SubResource("FabricWarm")
+
+[node name="ChairBack6" type="MeshInstance3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0.7, -4.45)
+mesh = SubResource("BoxMesh_40")
+
+[node name="TableLampBase" type="MeshInstance3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.765, -3.5)
+mesh = SubResource("CylinderMesh_41")
+
+[node name="TableLampShade" type="MeshInstance3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.95, -3.5)
+mesh = SubResource("CylinderMesh_42")
+
+[node name="OpenBook" type="MeshInstance3D" parent="ReadingTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, 0.765, -3.3)
+mesh = SubResource("BoxMesh_43")
+
+[node name="Lounge" type="Node3D" parent="."]
+
+[node name="Rug" type="MeshInstance3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.6, 0.006, 5.6)
+mesh = SubResource("PlaneMesh_44")
+
+[node name="SofaSouthSeat" type="CSGBox3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.2, 0.22, 7.4)
+use_collision = true
+size = Vector3(2.4, 0.44, 0.9)
+material = SubResource("Fabric")
+
+[node name="SofaSouthBack" type="CSGBox3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.2, 0.6, 7.78)
+use_collision = true
+size = Vector3(2.4, 0.5, 0.2)
+material = SubResource("Fabric")
+
+[node name="SofaSouthArmL" type="CSGBox3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.95, 0.32, 7.4)
+use_collision = true
+size = Vector3(0.2, 0.64, 0.9)
+material = SubResource("Fabric")
+
+[node name="SofaSouthArmR" type="CSGBox3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.45, 0.32, 7.4)
+use_collision = true
+size = Vector3(0.2, 0.64, 0.9)
+material = SubResource("Fabric")
+
+[node name="CushionS1" type="MeshInstance3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.6, 0.5, 7.3)
+mesh = SubResource("BoxMesh_45")
+
+[node name="CushionS2" type="MeshInstance3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.8, 0.5, 7.3)
+mesh = SubResource("BoxMesh_45")
+
+[node name="SofaEastSeat" type="CSGBox3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.45, 0.22, 5.2)
+use_collision = true
+size = Vector3(0.9, 0.44, 2.2)
+material = SubResource("Fabric")
+
+[node name="SofaEastBack" type="CSGBox3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.8, 0.6, 5.2)
+use_collision = true
+size = Vector3(0.2, 0.5, 2.2)
+material = SubResource("Fabric")
+
+[node name="SofaEastArmN" type="CSGBox3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.45, 0.32, 4)
+use_collision = true
+size = Vector3(0.9, 0.64, 0.2)
+material = SubResource("Fabric")
+
+[node name="SofaEastArmS" type="CSGBox3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.45, 0.32, 6.4)
+use_collision = true
+size = Vector3(0.9, 0.64, 0.2)
+material = SubResource("Fabric")
+
+[node name="CushionE1" type="MeshInstance3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.35, 0.5, 4.7)
+mesh = SubResource("BoxMesh_46")
+
+[node name="CushionE2" type="MeshInstance3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.35, 0.5, 5.7)
+mesh = SubResource("BoxMesh_46")
+
+[node name="ArmchairSeat" type="CSGBox3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.2, 0.22, 5.4)
+use_collision = true
+size = Vector3(0.85, 0.44, 0.85)
+material = SubResource("FabricWarm")
+
+[node name="ArmchairBack" type="CSGBox3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.85, 0.6, 5.4)
+use_collision = true
+size = Vector3(0.18, 0.5, 0.85)
+material = SubResource("FabricWarm")
+
+[node name="CoffeeTable" type="CSGBox3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.8, 0.2, 5.5)
+use_collision = true
+size = Vector3(1.3, 0.4, 0.75)
+material = SubResource("Wood")
+
+[node name="TableMagazine1" type="MeshInstance3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.5, 0.41, 5.45)
+mesh = SubResource("BoxMesh_47")
+
+[node name="TableMagazine2" type="MeshInstance3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.05, 0.41, 5.6)
+mesh = SubResource("BoxMesh_48")
+
+[node name="FloorLampBase" type="MeshInstance3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.45, 0.02, 7.5)
+mesh = SubResource("CylinderMesh_49")
+
+[node name="FloorLampPole" type="CSGCylinder3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.45, 0.8, 7.5)
+use_collision = true
+radius = 0.04
+height = 1.56
+sides = 8
+material = SubResource("DarkPanel")
+
+[node name="FloorLampShade" type="MeshInstance3D" parent="Lounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.45, 1.65, 7.5)
+mesh = SubResource("CylinderMesh_51")
+
+[node name="LoungeSign" type="Label3D" parent="Lounge"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 9.88, 2.4, 5.2)
+pixel_size = 0.005
+modulate = Color(1, 0.95, 0.85, 1)
+text = "LOUNGE"
+font_size = 96
+outline_size = 14
+outline_modulate = Color(0.08, 0.06, 0.05, 1)
+
+[node name="Plants" type="Node3D" parent="."]
+
+[node name="PlantLounge" type="Node3D" parent="Plants"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.4, 0, 7.4)
+
+[node name="Pot" type="CSGCylinder3D" parent="Plants/PlantLounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
+use_collision = true
+radius = 0.25
+height = 0.5
+sides = 16
+material = SubResource("FabricWarm")
+
+[node name="Foliage1" type="MeshInstance3D" parent="Plants/PlantLounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+mesh = SubResource("CylinderMesh_52")
+
+[node name="Foliage2" type="MeshInstance3D" parent="Plants/PlantLounge"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
+mesh = SubResource("CylinderMesh_53")
+
+[node name="PlantNorthEast" type="Node3D" parent="Plants"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.2, 0, -7.4)
+
+[node name="Pot" type="CSGCylinder3D" parent="Plants/PlantNorthEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
+use_collision = true
+radius = 0.25
+height = 0.5
+sides = 16
+material = SubResource("FabricWarm")
+
+[node name="Foliage1" type="MeshInstance3D" parent="Plants/PlantNorthEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+mesh = SubResource("CylinderMesh_52")
+
+[node name="Foliage2" type="MeshInstance3D" parent="Plants/PlantNorthEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
+mesh = SubResource("CylinderMesh_53")
+
+[node name="PlantEntranceW" type="Node3D" parent="Plants"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, 7.4)
+
+[node name="Pot" type="CSGCylinder3D" parent="Plants/PlantEntranceW"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
+use_collision = true
+radius = 0.25
+height = 0.5
+sides = 16
+material = SubResource("FabricWarm")
+
+[node name="Foliage1" type="MeshInstance3D" parent="Plants/PlantEntranceW"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+mesh = SubResource("CylinderMesh_52")
+
+[node name="Foliage2" type="MeshInstance3D" parent="Plants/PlantEntranceW"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
+mesh = SubResource("CylinderMesh_53")
+
+[node name="PlantEntranceE" type="Node3D" parent="Plants"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 7.4)
+
+[node name="Pot" type="CSGCylinder3D" parent="Plants/PlantEntranceE"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
+use_collision = true
+radius = 0.25
+height = 0.5
+sides = 16
+material = SubResource("FabricWarm")
+
+[node name="Foliage1" type="MeshInstance3D" parent="Plants/PlantEntranceE"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+mesh = SubResource("CylinderMesh_52")
+
+[node name="Foliage2" type="MeshInstance3D" parent="Plants/PlantEntranceE"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
+mesh = SubResource("CylinderMesh_53")
+
+[node name="PlantSouthWest" type="Node3D" parent="Plants"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.4, 0, 7.4)
+
+[node name="Pot" type="CSGCylinder3D" parent="Plants/PlantSouthWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
+use_collision = true
+radius = 0.25
+height = 0.5
+sides = 16
+material = SubResource("FabricWarm")
+
+[node name="Foliage1" type="MeshInstance3D" parent="Plants/PlantSouthWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+mesh = SubResource("CylinderMesh_52")
+
+[node name="Foliage2" type="MeshInstance3D" parent="Plants/PlantSouthWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
+mesh = SubResource("CylinderMesh_53")

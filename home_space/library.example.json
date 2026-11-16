@@ -1,0 +1,7 @@
+{
+  "_comment": "Copy to library.json (git-ignored) and list your own folders. Absolute paths, forward slashes.",
+  "videos": ["C:/Users/YOU/Videos"],
+  "images": ["C:/Users/YOU/Pictures"],
+  "comics": ["D:/Comics"],
+  "browser_home": "http://127.0.0.1:8090/start"
+}

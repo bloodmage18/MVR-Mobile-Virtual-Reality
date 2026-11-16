@@ -15,3 +15,11 @@ bridge/sensor_report.json
 Recording.txt
 transcript*.txt
 live_recording.wav
+
+# Home Space: your own media folder list (library.example.json is the template)
+home_space/library.json
+home_space/service/cache/
+
+# VR browser test: Brave profile (login cookies) and downloaded videos
+vr_browser_test/profile/
+vr_browser_test/cache/

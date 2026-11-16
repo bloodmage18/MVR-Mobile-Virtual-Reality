@@ -1,0 +1,958 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/stations/video_screen.gd" id="video_screen"]
+
+[sub_resource type="StandardMaterial3D" id="SeatVelvet"]
+albedo_color = Color(0.45, 0.06, 0.08, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="SeatDark"]
+albedo_color = Color(0.12, 0.05, 0.06, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="Curtain"]
+albedo_color = Color(0.38, 0.04, 0.06, 1)
+roughness = 1.0
+
+[sub_resource type="StandardMaterial3D" id="DarkPanel"]
+albedo_color = Color(0.09, 0.08, 0.1, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="Carpet"]
+albedo_color = Color(0.13, 0.1, 0.2, 1)
+roughness = 1.0
+
+[sub_resource type="StandardMaterial3D" id="Screen"]
+albedo_color = Color(0.04, 0.045, 0.06, 1)
+roughness = 0.6
+emission_enabled = true
+emission = Color(0.16, 0.18, 0.26, 1)
+emission_energy_multiplier = 1.0
+
+[sub_resource type="StandardMaterial3D" id="Poster"]
+albedo_color = Color(0.05, 0.04, 0.05, 1)
+emission_enabled = true
+emission = Color(0.3, 0.16, 0.08, 1)
+emission_energy_multiplier = 0.8
+
+[sub_resource type="StandardMaterial3D" id="WarmGlow"]
+albedo_color = Color(1, 0.8, 0.55, 1)
+emission_enabled = true
+emission = Color(1, 0.72, 0.42, 1)
+emission_energy_multiplier = 2.0
+
+[sub_resource type="StandardMaterial3D" id="AisleGlow"]
+albedo_color = Color(1, 0.6, 0.3, 1)
+emission_enabled = true
+emission = Color(1, 0.55, 0.25, 1)
+emission_energy_multiplier = 2.5
+
+[sub_resource type="StandardMaterial3D" id="Gold"]
+albedo_color = Color(0.75, 0.58, 0.25, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="StandardMaterial3D" id="Wood"]
+albedo_color = Color(0.3, 0.17, 0.1, 1)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="Sofa"]
+albedo_color = Color(0.22, 0.3, 0.42, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="Rug"]
+albedo_color = Color(0.42, 0.28, 0.16, 1)
+roughness = 1.0
+
+[sub_resource type="BoxMesh" id="ArmMesh"]
+size = Vector3(0.55, 0.24, 0.07)
+material = SubResource("Gold")
+
+[sub_resource type="BoxMesh" id="SconceMesh"]
+size = Vector3(0.32, 0.5, 0.08)
+material = SubResource("WarmGlow")
+
+[sub_resource type="BoxMesh" id="StripMesh"]
+size = Vector3(5.7, 0.02, 0.05)
+material = SubResource("AisleGlow")
+
+[sub_resource type="BoxMesh" id="WallPanelNS"]
+size = Vector3(10.4, 4.3, 0.04)
+material = SubResource("DarkPanel")
+
+[sub_resource type="BoxMesh" id="WallPanelW"]
+size = Vector3(0.04, 4.3, 15.8)
+material = SubResource("DarkPanel")
+
+[sub_resource type="PlaneMesh" id="CarpetMesh"]
+size = Vector2(10.4, 15.8)
+material = SubResource("Carpet")
+
+[sub_resource type="QuadMesh" id="MainSurface"]
+size = Vector2(7.2, 4.05)
+material = SubResource("Screen")
+
+[sub_resource type="BoxMesh" id="MainMask"]
+size = Vector3(7.6, 4.1, 0.06)
+material = SubResource("DarkPanel")
+
+[sub_resource type="BoxMesh" id="CurtainMesh"]
+size = Vector3(1, 4.28, 0.3)
+material = SubResource("Curtain")
+
+[sub_resource type="QuadMesh" id="SmallSurface"]
+size = Vector2(2.8, 1.575)
+material = SubResource("Screen")
+
+[sub_resource type="BoxMesh" id="SmallFrame"]
+size = Vector3(2.96, 1.73, 0.06)
+material = SubResource("DarkPanel")
+
+[sub_resource type="QuadMesh" id="PosterSurface"]
+size = Vector2(1.4, 2.0)
+material = SubResource("Poster")
+
+[sub_resource type="BoxMesh" id="PosterFrame"]
+size = Vector3(1.56, 2.16, 0.06)
+material = SubResource("Gold")
+
+[sub_resource type="BoxMesh" id="SignBoard"]
+size = Vector3(0.08, 0.8, 3.6)
+material = SubResource("DarkPanel")
+
+[sub_resource type="CylinderMesh" id="RodMesh"]
+top_radius = 0.02
+bottom_radius = 0.02
+height = 0.12
+material = SubResource("Gold")
+
+[sub_resource type="PlaneMesh" id="RugMesh"]
+size = Vector2(3.4, 2.4)
+material = SubResource("Rug")
+
+[sub_resource type="CylinderMesh" id="LampPole"]
+top_radius = 0.025
+bottom_radius = 0.025
+height = 1.4
+material = SubResource("Gold")
+
+[sub_resource type="CylinderMesh" id="LampShade"]
+top_radius = 0.15
+bottom_radius = 0.24
+height = 0.3
+material = SubResource("WarmGlow")
+
+[sub_resource type="CylinderMesh" id="LampBase"]
+top_radius = 0.18
+bottom_radius = 0.2
+height = 0.04
+material = SubResource("Gold")
+
+[sub_resource type="QuadMesh" id="BoothWindow"]
+size = Vector2(1.2, 0.6)
+material = SubResource("Screen")
+
+[sub_resource type="CylinderMesh" id="LensMesh"]
+top_radius = 0.09
+bottom_radius = 0.09
+height = 0.25
+material = SubResource("WarmGlow")
+
+[sub_resource type="BoxMesh" id="DoorMesh"]
+size = Vector3(0.9, 2.1, 0.04)
+material = SubResource("Wood")
+
+[sub_resource type="CylinderMesh" id="PopcornMesh"]
+top_radius = 0.14
+bottom_radius = 0.1
+height = 0.3
+material = SubResource("Curtain")
+
+[node name="Floor3" type="Node3D"]
+
+[node name="Lighting" type="Node3D" parent="."]
+
+[node name="ScreenGlow" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.3, 2.2, 0)
+light_color = Color(0.6, 0.7, 1, 1)
+light_energy = 0.7
+omni_range = 7.5
+
+[node name="SconceLightNorth" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.25, 2.5, -7.4)
+light_color = Color(1, 0.75, 0.5, 1)
+light_energy = 0.9
+omni_range = 6.5
+
+[node name="SconceLightSouth" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.25, 2.5, 7.4)
+light_color = Color(1, 0.75, 0.5, 1)
+light_energy = 0.9
+omni_range = 6.5
+
+[node name="FoyerLight" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.2, 3.9, 0.5)
+light_color = Color(1, 0.88, 0.7, 1)
+light_energy = 1.3
+omni_range = 9
+
+[node name="CornerLampLight" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1.55, 7.3)
+light_color = Color(1, 0.78, 0.5, 1)
+light_energy = 0.9
+omni_range = 5
+
+[node name="ConcessionLight" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.9, 3.6, 5.6)
+light_color = Color(1, 0.85, 0.65, 1)
+light_energy = 1
+omni_range = 6
+
+[node name="RoomFinish" type="Node3D" parent="."]
+
+[node name="Carpet" type="MeshInstance3D" parent="RoomFinish"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.7, 0.004, 0)
+mesh = SubResource("CarpetMesh")
+
+[node name="WallPanelNorth" type="MeshInstance3D" parent="RoomFinish"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.7, 2.15, -7.98)
+mesh = SubResource("WallPanelNS")
+
+[node name="WallPanelSouth" type="MeshInstance3D" parent="RoomFinish"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.7, 2.15, 7.98)
+mesh = SubResource("WallPanelNS")
+
+[node name="WallPanelWest" type="MeshInstance3D" parent="RoomFinish"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.98, 2.15, 0)
+mesh = SubResource("WallPanelW")
+
+[node name="Stations" type="Node3D" parent="."]
+
+[node name="Station_Screen_Main" type="Node3D" parent="Stations"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -9.8, 2.225, 0)
+script = ExtResource("video_screen")
+
+[node name="Mask" type="MeshInstance3D" parent="Stations/Station_Screen_Main"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.07)
+mesh = SubResource("MainMask")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Screen_Main"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("MainSurface")
+
+[node name="CurtainLeft" type="MeshInstance3D" parent="Stations/Station_Screen_Main"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.3, -0.085, -0.05)
+mesh = SubResource("CurtainMesh")
+
+[node name="CurtainRight" type="MeshInstance3D" parent="Stations/Station_Screen_Main"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.3, -0.085, -0.05)
+mesh = SubResource("CurtainMesh")
+
+[node name="Label" type="Label3D" parent="Stations/Station_Screen_Main"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0.02)
+pixel_size = 0.006
+text = "MAIN SCREEN\nvideo player"
+font_size = 96
+outline_size = 12
+modulate = Color(0.75, 0.8, 1, 1)
+double_sided = false
+
+[node name="Station_Screen_Small" type="Node3D" parent="Stations"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 3.2, 1.5, 7.88)
+script = ExtResource("video_screen")
+max_w = 960
+
+[node name="Frame" type="MeshInstance3D" parent="Stations/Station_Screen_Small"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04)
+mesh = SubResource("SmallFrame")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Screen_Small"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("SmallSurface")
+
+[node name="Label" type="Label3D" parent="Stations/Station_Screen_Small"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.02)
+pixel_size = 0.004
+text = "LOUNGE SCREEN\nvideo player"
+font_size = 64
+outline_size = 12
+modulate = Color(0.75, 0.8, 1, 1)
+double_sided = false
+
+[node name="Station_Poster_1" type="Node3D" parent="Stations"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 9.9, 1.65, 5)
+
+[node name="Frame" type="MeshInstance3D" parent="Stations/Station_Poster_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.03)
+mesh = SubResource("PosterFrame")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Poster_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.005)
+mesh = SubResource("PosterSurface")
+
+[node name="Title" type="Label3D" parent="Stations/Station_Poster_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, 0.02)
+pixel_size = 0.004
+text = "NOW SHOWING"
+font_size = 96
+outline_size = 12
+modulate = Color(1, 0.92, 0.75, 1)
+double_sided = false
+
+[node name="Label" type="Label3D" parent="Stations/Station_Poster_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.02)
+pixel_size = 0.004
+text = "poster\n(next film)"
+font_size = 56
+outline_size = 12
+modulate = Color(1, 0.8, 0.6, 1)
+double_sided = false
+
+[node name="Seating" type="Node3D" parent="."]
+
+[node name="RowA" type="Node3D" parent="Seating"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.95, 0, 0)
+
+[node name="BlockNorth" type="Node3D" parent="Seating/RowA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -3.6)
+
+[node name="Seats" type="CSGBox3D" parent="Seating/RowA/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0)
+use_collision = true
+size = Vector3(0.62, 0.44, 5.6)
+material = SubResource("SeatVelvet")
+
+[node name="Backrest" type="CSGBox3D" parent="Seating/RowA/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38, 0.55, 0)
+use_collision = true
+size = Vector3(0.14, 1.1, 5.6)
+material = SubResource("SeatDark")
+
+[node name="Arm1" type="MeshInstance3D" parent="Seating/RowA/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm2" type="MeshInstance3D" parent="Seating/RowA/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm3" type="MeshInstance3D" parent="Seating/RowA/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm4" type="MeshInstance3D" parent="Seating/RowA/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm5" type="MeshInstance3D" parent="Seating/RowA/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm6" type="MeshInstance3D" parent="Seating/RowA/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm7" type="MeshInstance3D" parent="Seating/RowA/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm8" type="MeshInstance3D" parent="Seating/RowA/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm9" type="MeshInstance3D" parent="Seating/RowA/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="BlockSouth" type="Node3D" parent="Seating/RowA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3.6)
+
+[node name="Seats" type="CSGBox3D" parent="Seating/RowA/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0)
+use_collision = true
+size = Vector3(0.62, 0.44, 5.6)
+material = SubResource("SeatVelvet")
+
+[node name="Backrest" type="CSGBox3D" parent="Seating/RowA/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38, 0.55, 0)
+use_collision = true
+size = Vector3(0.14, 1.1, 5.6)
+material = SubResource("SeatDark")
+
+[node name="Arm1" type="MeshInstance3D" parent="Seating/RowA/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm2" type="MeshInstance3D" parent="Seating/RowA/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm3" type="MeshInstance3D" parent="Seating/RowA/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm4" type="MeshInstance3D" parent="Seating/RowA/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm5" type="MeshInstance3D" parent="Seating/RowA/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm6" type="MeshInstance3D" parent="Seating/RowA/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm7" type="MeshInstance3D" parent="Seating/RowA/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm8" type="MeshInstance3D" parent="Seating/RowA/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm9" type="MeshInstance3D" parent="Seating/RowA/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="RowLetter" type="Label3D" parent="Seating/RowA"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0.46, 0.82, -1.3)
+pixel_size = 0.003
+text = "ROW A"
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.92, 0.75, 1)
+double_sided = false
+
+[node name="RowB" type="Node3D" parent="Seating"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.3, 0, 0)
+
+[node name="BlockNorth" type="Node3D" parent="Seating/RowB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -3.6)
+
+[node name="Seats" type="CSGBox3D" parent="Seating/RowB/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0)
+use_collision = true
+size = Vector3(0.62, 0.44, 5.6)
+material = SubResource("SeatVelvet")
+
+[node name="Backrest" type="CSGBox3D" parent="Seating/RowB/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38, 0.55, 0)
+use_collision = true
+size = Vector3(0.14, 1.1, 5.6)
+material = SubResource("SeatDark")
+
+[node name="Arm1" type="MeshInstance3D" parent="Seating/RowB/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm2" type="MeshInstance3D" parent="Seating/RowB/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm3" type="MeshInstance3D" parent="Seating/RowB/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm4" type="MeshInstance3D" parent="Seating/RowB/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm5" type="MeshInstance3D" parent="Seating/RowB/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm6" type="MeshInstance3D" parent="Seating/RowB/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm7" type="MeshInstance3D" parent="Seating/RowB/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm8" type="MeshInstance3D" parent="Seating/RowB/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm9" type="MeshInstance3D" parent="Seating/RowB/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="BlockSouth" type="Node3D" parent="Seating/RowB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3.6)
+
+[node name="Seats" type="CSGBox3D" parent="Seating/RowB/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0)
+use_collision = true
+size = Vector3(0.62, 0.44, 5.6)
+material = SubResource("SeatVelvet")
+
+[node name="Backrest" type="CSGBox3D" parent="Seating/RowB/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38, 0.55, 0)
+use_collision = true
+size = Vector3(0.14, 1.1, 5.6)
+material = SubResource("SeatDark")
+
+[node name="Arm1" type="MeshInstance3D" parent="Seating/RowB/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm2" type="MeshInstance3D" parent="Seating/RowB/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm3" type="MeshInstance3D" parent="Seating/RowB/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm4" type="MeshInstance3D" parent="Seating/RowB/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm5" type="MeshInstance3D" parent="Seating/RowB/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm6" type="MeshInstance3D" parent="Seating/RowB/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm7" type="MeshInstance3D" parent="Seating/RowB/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm8" type="MeshInstance3D" parent="Seating/RowB/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm9" type="MeshInstance3D" parent="Seating/RowB/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="RowLetter" type="Label3D" parent="Seating/RowB"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0.46, 0.82, -1.3)
+pixel_size = 0.003
+text = "ROW B"
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.92, 0.75, 1)
+double_sided = false
+
+[node name="RowC" type="Node3D" parent="Seating"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.65, 0, 0)
+
+[node name="BlockNorth" type="Node3D" parent="Seating/RowC"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -3.6)
+
+[node name="Seats" type="CSGBox3D" parent="Seating/RowC/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0)
+use_collision = true
+size = Vector3(0.62, 0.44, 5.6)
+material = SubResource("SeatVelvet")
+
+[node name="Backrest" type="CSGBox3D" parent="Seating/RowC/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38, 0.55, 0)
+use_collision = true
+size = Vector3(0.14, 1.1, 5.6)
+material = SubResource("SeatDark")
+
+[node name="Arm1" type="MeshInstance3D" parent="Seating/RowC/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm2" type="MeshInstance3D" parent="Seating/RowC/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm3" type="MeshInstance3D" parent="Seating/RowC/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm4" type="MeshInstance3D" parent="Seating/RowC/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm5" type="MeshInstance3D" parent="Seating/RowC/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm6" type="MeshInstance3D" parent="Seating/RowC/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm7" type="MeshInstance3D" parent="Seating/RowC/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm8" type="MeshInstance3D" parent="Seating/RowC/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm9" type="MeshInstance3D" parent="Seating/RowC/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="BlockSouth" type="Node3D" parent="Seating/RowC"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3.6)
+
+[node name="Seats" type="CSGBox3D" parent="Seating/RowC/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0)
+use_collision = true
+size = Vector3(0.62, 0.44, 5.6)
+material = SubResource("SeatVelvet")
+
+[node name="Backrest" type="CSGBox3D" parent="Seating/RowC/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38, 0.55, 0)
+use_collision = true
+size = Vector3(0.14, 1.1, 5.6)
+material = SubResource("SeatDark")
+
+[node name="Arm1" type="MeshInstance3D" parent="Seating/RowC/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm2" type="MeshInstance3D" parent="Seating/RowC/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm3" type="MeshInstance3D" parent="Seating/RowC/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm4" type="MeshInstance3D" parent="Seating/RowC/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm5" type="MeshInstance3D" parent="Seating/RowC/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm6" type="MeshInstance3D" parent="Seating/RowC/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm7" type="MeshInstance3D" parent="Seating/RowC/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm8" type="MeshInstance3D" parent="Seating/RowC/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm9" type="MeshInstance3D" parent="Seating/RowC/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="RowLetter" type="Label3D" parent="Seating/RowC"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0.46, 0.82, -1.3)
+pixel_size = 0.003
+text = "ROW C"
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.92, 0.75, 1)
+double_sided = false
+
+[node name="RowD" type="Node3D" parent="Seating"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, 0)
+
+[node name="BlockNorth" type="Node3D" parent="Seating/RowD"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -3.6)
+
+[node name="Seats" type="CSGBox3D" parent="Seating/RowD/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0)
+use_collision = true
+size = Vector3(0.62, 0.44, 5.6)
+material = SubResource("SeatVelvet")
+
+[node name="Backrest" type="CSGBox3D" parent="Seating/RowD/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38, 0.55, 0)
+use_collision = true
+size = Vector3(0.14, 1.1, 5.6)
+material = SubResource("SeatDark")
+
+[node name="Arm1" type="MeshInstance3D" parent="Seating/RowD/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm2" type="MeshInstance3D" parent="Seating/RowD/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm3" type="MeshInstance3D" parent="Seating/RowD/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm4" type="MeshInstance3D" parent="Seating/RowD/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm5" type="MeshInstance3D" parent="Seating/RowD/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm6" type="MeshInstance3D" parent="Seating/RowD/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm7" type="MeshInstance3D" parent="Seating/RowD/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm8" type="MeshInstance3D" parent="Seating/RowD/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm9" type="MeshInstance3D" parent="Seating/RowD/BlockNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="BlockSouth" type="Node3D" parent="Seating/RowD"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3.6)
+
+[node name="Seats" type="CSGBox3D" parent="Seating/RowD/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0)
+use_collision = true
+size = Vector3(0.62, 0.44, 5.6)
+material = SubResource("SeatVelvet")
+
+[node name="Backrest" type="CSGBox3D" parent="Seating/RowD/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38, 0.55, 0)
+use_collision = true
+size = Vector3(0.14, 1.1, 5.6)
+material = SubResource("SeatDark")
+
+[node name="Arm1" type="MeshInstance3D" parent="Seating/RowD/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm2" type="MeshInstance3D" parent="Seating/RowD/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm3" type="MeshInstance3D" parent="Seating/RowD/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm4" type="MeshInstance3D" parent="Seating/RowD/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, -0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm5" type="MeshInstance3D" parent="Seating/RowD/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm6" type="MeshInstance3D" parent="Seating/RowD/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 0.7)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm7" type="MeshInstance3D" parent="Seating/RowD/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 1.4)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm8" type="MeshInstance3D" parent="Seating/RowD/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.1)
+mesh = SubResource("ArmMesh")
+
+[node name="Arm9" type="MeshInstance3D" parent="Seating/RowD/BlockSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.56, 2.8)
+mesh = SubResource("ArmMesh")
+
+[node name="RowLetter" type="Label3D" parent="Seating/RowD"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0.46, 0.82, -1.3)
+pixel_size = 0.003
+text = "ROW D"
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.92, 0.75, 1)
+double_sided = false
+
+[node name="AisleStrips" type="Node3D" parent="Seating"]
+
+[node name="Strip1" type="MeshInstance3D" parent="Seating/AisleStrips"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.4, 0.012, -6.45)
+mesh = SubResource("StripMesh")
+
+[node name="Strip2" type="MeshInstance3D" parent="Seating/AisleStrips"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.4, 0.012, -0.75)
+mesh = SubResource("StripMesh")
+
+[node name="Strip3" type="MeshInstance3D" parent="Seating/AisleStrips"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.4, 0.012, 0.75)
+mesh = SubResource("StripMesh")
+
+[node name="Strip4" type="MeshInstance3D" parent="Seating/AisleStrips"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.4, 0.012, 6.45)
+mesh = SubResource("StripMesh")
+
+[node name="Foyer" type="Node3D" parent="."]
+
+[node name="CinemaSign" type="Node3D" parent="Foyer"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 3.8, 0.75)
+
+[node name="Board" type="MeshInstance3D" parent="Foyer/CinemaSign"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("SignBoard")
+
+[node name="RodNorth" type="MeshInstance3D" parent="Foyer/CinemaSign"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.44, -1.5)
+mesh = SubResource("RodMesh")
+
+[node name="RodSouth" type="MeshInstance3D" parent="Foyer/CinemaSign"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.44, 1.5)
+mesh = SubResource("RodMesh")
+
+[node name="Text" type="Label3D" parent="Foyer/CinemaSign"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0.05, 0, 0)
+pixel_size = 0.006
+text = "CINEMA"
+font_size = 96
+outline_size = 16
+modulate = Color(1, 0.8, 0.35, 1)
+double_sided = false
+
+[node name="TextBack" type="Label3D" parent="Foyer/CinemaSign"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -0.05, 0, 0)
+pixel_size = 0.004
+text = "EXIT  ·  STAIRS"
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.92, 0.75, 1)
+double_sided = false
+
+[node name="Concession" type="Node3D" parent="Foyer"]
+
+[node name="Counter" type="CSGBox3D" parent="Foyer/Concession"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.9, 0.525, 7.5)
+use_collision = true
+size = Vector3(3.4, 1.05, 0.8)
+material = SubResource("Wood")
+
+[node name="Popcorn1" type="MeshInstance3D" parent="Foyer/Concession"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 1.2, 7.55)
+mesh = SubResource("PopcornMesh")
+
+[node name="Popcorn2" type="MeshInstance3D" parent="Foyer/Concession"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.5, 1.2, 7.55)
+mesh = SubResource("PopcornMesh")
+
+[node name="Popcorn3" type="MeshInstance3D" parent="Foyer/Concession"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.6, 1.2, 7.55)
+mesh = SubResource("PopcornMesh")
+
+[node name="Sign" type="Label3D" parent="Foyer/Concession"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 7.9, 2.6, 7.95)
+pixel_size = 0.004
+text = "SNACKS"
+font_size = 80
+outline_size = 12
+modulate = Color(1, 0.8, 0.35, 1)
+double_sided = false
+
+[node name="ProjectionBooth" type="Node3D" parent="Foyer"]
+
+[node name="Booth" type="CSGBox3D" parent="Foyer/ProjectionBooth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.725, 2.15, -6.5)
+use_collision = true
+size = Vector3(2.25, 4.3, 3)
+material = SubResource("DarkPanel")
+
+[node name="Window" type="MeshInstance3D" parent="Foyer/ProjectionBooth"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 3.595, 2.9, -6.5)
+mesh = SubResource("BoothWindow")
+
+[node name="Lens" type="MeshInstance3D" parent="Foyer/ProjectionBooth"]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 3.5, 2.9, -6.2)
+mesh = SubResource("LensMesh")
+
+[node name="Door" type="MeshInstance3D" parent="Foyer/ProjectionBooth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.725, 1.05, -4.98)
+mesh = SubResource("DoorMesh")
+
+[node name="Label" type="Label3D" parent="Foyer/ProjectionBooth"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 3.59, 3.65, -6.5)
+pixel_size = 0.004
+text = "PROJECTION"
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.92, 0.75, 1)
+double_sided = false
+
+[node name="LoungeCorner" type="Node3D" parent="."]
+
+[node name="Rug" type="MeshInstance3D" parent="LoungeCorner"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.2, 0.006, 6.3)
+mesh = SubResource("RugMesh")
+
+[node name="Sofa" type="Node3D" parent="LoungeCorner"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.2, 0, 5.2)
+
+[node name="Seat" type="CSGBox3D" parent="LoungeCorner/Sofa"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0.1)
+use_collision = true
+size = Vector3(2.4, 0.44, 0.8)
+material = SubResource("Sofa")
+
+[node name="Back" type="CSGBox3D" parent="LoungeCorner/Sofa"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, -0.4)
+use_collision = true
+size = Vector3(2.4, 0.9, 0.22)
+material = SubResource("Sofa")
+
+[node name="ArmWest" type="CSGBox3D" parent="LoungeCorner/Sofa"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.29, 0.32, 0)
+use_collision = true
+size = Vector3(0.18, 0.64, 1)
+material = SubResource("Sofa")
+
+[node name="ArmEast" type="CSGBox3D" parent="LoungeCorner/Sofa"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.29, 0.32, 0)
+use_collision = true
+size = Vector3(0.18, 0.64, 1)
+material = SubResource("Sofa")
+
+[node name="MediaCabinet" type="CSGBox3D" parent="LoungeCorner"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.2, 0.25, 7.65)
+use_collision = true
+size = Vector3(2.6, 0.5, 0.45)
+material = SubResource("Wood")
+
+[node name="FloorLamp" type="Node3D" parent="LoungeCorner"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 7.3)
+
+[node name="Base" type="MeshInstance3D" parent="LoungeCorner/FloorLamp"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+mesh = SubResource("LampBase")
+
+[node name="Pole" type="MeshInstance3D" parent="LoungeCorner/FloorLamp"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.72, 0)
+mesh = SubResource("LampPole")
+
+[node name="Shade" type="MeshInstance3D" parent="LoungeCorner/FloorLamp"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+mesh = SubResource("LampShade")
+
+[node name="Decor" type="Node3D" parent="."]
+
+[node name="SconceNorth1" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.5, 2.5, -7.92)
+mesh = SubResource("SconceMesh")
+
+[node name="SconceSouth1" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.5, 2.5, 7.92)
+mesh = SubResource("SconceMesh")
+
+[node name="SconceNorth2" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.25, 2.5, -7.92)
+mesh = SubResource("SconceMesh")
+
+[node name="SconceSouth2" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.25, 2.5, 7.92)
+mesh = SubResource("SconceMesh")
+
+[node name="SconceNorth3" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 2.5, -7.92)
+mesh = SubResource("SconceMesh")
+
+[node name="SconceSouth3" type="MeshInstance3D" parent="Decor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 2.5, 7.92)
+mesh = SubResource("SconceMesh")

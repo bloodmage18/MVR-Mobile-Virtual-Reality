@@ -1,0 +1,1744 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="ShelfWood"]
+albedo_color = Color(0.27, 0.17, 0.1, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="LightWood"]
+albedo_color = Color(0.55, 0.38, 0.22, 1)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="Fabric"]
+albedo_color = Color(0.48, 0.13, 0.1, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="Metal"]
+albedo_color = Color(0.09, 0.09, 0.1, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="StandardMaterial3D" id="GildedFrame"]
+albedo_color = Color(0.62, 0.48, 0.22, 1)
+metallic = 0.6
+roughness = 0.35
+
+[sub_resource type="StandardMaterial3D" id="Surface"]
+albedo_color = Color(0.04, 0.05, 0.07, 1)
+roughness = 0.3
+emission_enabled = true
+emission = Color(0.12, 0.16, 0.22, 1)
+emission_energy_multiplier = 0.6
+
+[sub_resource type="StandardMaterial3D" id="LampGlow"]
+albedo_color = Color(1, 0.86, 0.62, 1)
+roughness = 0.5
+emission_enabled = true
+emission = Color(1, 0.82, 0.55, 1)
+emission_energy_multiplier = 2
+
+[sub_resource type="StandardMaterial3D" id="SignBoard"]
+albedo_color = Color(0.12, 0.17, 0.25, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="RugWarm"]
+albedo_color = Color(0.45, 0.2, 0.13, 1)
+roughness = 1
+
+[sub_resource type="StandardMaterial3D" id="RugCool"]
+albedo_color = Color(0.24, 0.28, 0.33, 1)
+roughness = 1
+
+[sub_resource type="StandardMaterial3D" id="Plant"]
+albedo_color = Color(0.18, 0.36, 0.16, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Pot"]
+albedo_color = Color(0.6, 0.32, 0.2, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="BookRed"]
+albedo_color = Color(0.55, 0.12, 0.1, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="BookBlue"]
+albedo_color = Color(0.14, 0.24, 0.48, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="BookGreen"]
+albedo_color = Color(0.16, 0.38, 0.22, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="BookOchre"]
+albedo_color = Color(0.75, 0.55, 0.16, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="BookCream"]
+albedo_color = Color(0.85, 0.8, 0.66, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="BookPlum"]
+albedo_color = Color(0.38, 0.16, 0.36, 1)
+roughness = 0.8
+
+[sub_resource type="BoxMesh" id="BooksWallLong"]
+size = Vector3(0.95, 0.36, 0.34)
+
+[sub_resource type="BoxMesh" id="BooksWallShort"]
+size = Vector3(0.72, 0.3, 0.34)
+
+[sub_resource type="BoxMesh" id="BooksRowA"]
+size = Vector3(0.52, 0.36, 0.54)
+
+[sub_resource type="BoxMesh" id="BooksRowB"]
+size = Vector3(0.4, 0.3, 0.54)
+
+[sub_resource type="BoxMesh" id="BooksRowC"]
+size = Vector3(0.46, 0.33, 0.54)
+
+[sub_resource type="BoxMesh" id="BookFlat"]
+size = Vector3(0.3, 0.06, 0.22)
+
+[sub_resource type="BoxMesh" id="GalleryFrame"]
+size = Vector3(1.74, 1.24, 0.06)
+
+[sub_resource type="QuadMesh" id="GalleryCanvas"]
+size = Vector2(1.5, 1)
+
+[sub_resource type="BoxMesh" id="ComicRackFrame"]
+size = Vector3(1.32, 1.1, 0.04)
+
+[sub_resource type="QuadMesh" id="ComicRackSurface"]
+size = Vector2(1.2, 0.8)
+
+[sub_resource type="QuadMesh" id="ReaderSurface"]
+size = Vector2(1.2, 1.6)
+
+[sub_resource type="CylinderMesh" id="PendantShade"]
+top_radius = 0.3
+bottom_radius = 0.36
+height = 0.1
+
+[sub_resource type="CylinderMesh" id="SpotFixture"]
+top_radius = 0.1
+bottom_radius = 0.13
+height = 0.2
+
+[sub_resource type="CylinderMesh" id="HangRod"]
+top_radius = 0.012
+bottom_radius = 0.012
+height = 0.6
+
+[sub_resource type="CylinderMesh" id="Foliage"]
+top_radius = 0.08
+bottom_radius = 0.38
+height = 1.1
+
+[sub_resource type="BoxMesh" id="BankerShade"]
+size = Vector3(0.3, 0.08, 0.14)
+
+[sub_resource type="BoxMesh" id="SignBoardMesh"]
+size = Vector3(2.7, 0.56, 0.05)
+
+[sub_resource type="BoxMesh" id="RugNook"]
+size = Vector3(2.4, 0.01, 2.6)
+
+[sub_resource type="BoxMesh" id="RugGallery"]
+size = Vector3(12, 0.01, 1.8)
+
+[sub_resource type="BoxShape3D" id="WallShelfShape"]
+size = Vector3(12, 2.2, 0.45)
+
+[sub_resource type="BoxShape3D" id="RowShelfShape"]
+size = Vector3(5.1, 2.2, 0.6)
+
+[node name="Floor2" type="Node3D"]
+
+[node name="Lighting" type="Node3D" parent="."]
+
+[node name="ReadingLightWest" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 3.3, -4.4)
+light_color = Color(1, 0.88, 0.7, 1)
+light_energy = 1.6
+omni_range = 7.5
+
+[node name="ReadingLightEast" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 3.3, -4.4)
+light_color = Color(1, 0.88, 0.7, 1)
+light_energy = 1.6
+omni_range = 7.5
+
+[node name="NookLampLight" type="OmniLight3D" parent="Lighting"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.15, 1.45, -4.2)
+light_color = Color(1, 0.78, 0.5, 1)
+light_energy = 1.0
+omni_range = 3.5
+
+[node name="GallerySpotWest" type="SpotLight3D" parent="Lighting"]
+transform = Transform3D(-0.819, -0.269, 0.506, 0, 0.882, 0.47, -0.573, 0.385, -0.723, -6.5, 3.55, 3.6)
+light_color = Color(1, 0.95, 0.88, 1)
+light_energy = 5.0
+spot_range = 8.0
+spot_angle = 58.0
+spot_attenuation = 0.8
+
+[node name="GallerySpotCentre" type="SpotLight3D" parent="Lighting"]
+transform = Transform3D(-1, 0, 0, 0, 0.89, 0.455, 0, 0.455, -0.89, 0, 3.55, 3.6)
+light_color = Color(1, 0.95, 0.88, 1)
+light_energy = 5.0
+spot_range = 8.0
+spot_angle = 58.0
+spot_attenuation = 0.8
+
+[node name="GallerySpotEast" type="SpotLight3D" parent="Lighting"]
+transform = Transform3D(-0.819, 0.269, -0.506, 0, 0.882, 0.47, 0.573, 0.385, -0.723, 6.5, 3.55, 3.6)
+light_color = Color(1, 0.95, 0.88, 1)
+light_energy = 5.0
+spot_range = 8.0
+spot_angle = 58.0
+spot_attenuation = 0.8
+
+[node name="Fixtures" type="Node3D" parent="Lighting"]
+
+[node name="PendantWest" type="MeshInstance3D" parent="Lighting/Fixtures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 3.75, -4.4)
+mesh = SubResource("PendantShade")
+material_override = SubResource("LampGlow")
+
+[node name="PendantEast" type="MeshInstance3D" parent="Lighting/Fixtures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 3.75, -4.4)
+mesh = SubResource("PendantShade")
+material_override = SubResource("LampGlow")
+
+[node name="SpotFixtureWest" type="MeshInstance3D" parent="Lighting/Fixtures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5, 3.7, 3.6)
+mesh = SubResource("SpotFixture")
+material_override = SubResource("Metal")
+
+[node name="SpotFixtureCentre" type="MeshInstance3D" parent="Lighting/Fixtures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.7, 3.6)
+mesh = SubResource("SpotFixture")
+material_override = SubResource("Metal")
+
+[node name="SpotFixtureEast" type="MeshInstance3D" parent="Lighting/Fixtures"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.5, 3.7, 3.6)
+mesh = SubResource("SpotFixture")
+material_override = SubResource("Metal")
+
+[node name="ReadingRoom" type="Node3D" parent="."]
+
+[node name="Shelves" type="Node3D" parent="ReadingRoom"]
+
+[node name="NorthWallShelves" type="Node3D" parent="ReadingRoom/Shelves"]
+
+[node name="Collision" type="StaticBody3D" parent="ReadingRoom/Shelves/NorthWallShelves"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.6, 1.1, -7.675)
+
+[node name="Shape" type="CollisionShape3D" parent="ReadingRoom/Shelves/NorthWallShelves/Collision"]
+shape = SubResource("WallShelfShape")
+
+[node name="Frame" type="Node3D" parent="ReadingRoom/Shelves/NorthWallShelves"]
+
+[node name="Back" type="CSGBox3D" parent="ReadingRoom/Shelves/NorthWallShelves/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.6, 1.1, -7.88)
+size = Vector3(12, 2.2, 0.04)
+material = SubResource("ShelfWood")
+
+[node name="Plinth" type="CSGBox3D" parent="ReadingRoom/Shelves/NorthWallShelves/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.6, 0.05, -7.675)
+size = Vector3(12, 0.1, 0.45)
+material = SubResource("ShelfWood")
+
+[node name="Board1" type="CSGBox3D" parent="ReadingRoom/Shelves/NorthWallShelves/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.6, 0.6, -7.675)
+size = Vector3(12, 0.04, 0.45)
+material = SubResource("ShelfWood")
+
+[node name="Board2" type="CSGBox3D" parent="ReadingRoom/Shelves/NorthWallShelves/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.6, 1.12, -7.675)
+size = Vector3(12, 0.04, 0.45)
+material = SubResource("ShelfWood")
+
+[node name="Board3" type="CSGBox3D" parent="ReadingRoom/Shelves/NorthWallShelves/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.6, 1.64, -7.675)
+size = Vector3(12, 0.04, 0.45)
+material = SubResource("ShelfWood")
+
+[node name="Top" type="CSGBox3D" parent="ReadingRoom/Shelves/NorthWallShelves/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.6, 2.18, -7.675)
+size = Vector3(12, 0.04, 0.45)
+material = SubResource("ShelfWood")
+
+[node name="Divider1" type="CSGBox3D" parent="ReadingRoom/Shelves/NorthWallShelves/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.58, 1.1, -7.675)
+size = Vector3(0.04, 2.2, 0.45)
+material = SubResource("ShelfWood")
+
+[node name="Divider2" type="CSGBox3D" parent="ReadingRoom/Shelves/NorthWallShelves/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.58, 1.1, -7.675)
+size = Vector3(0.04, 2.2, 0.45)
+material = SubResource("ShelfWood")
+
+[node name="Divider3" type="CSGBox3D" parent="ReadingRoom/Shelves/NorthWallShelves/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.58, 1.1, -7.675)
+size = Vector3(0.04, 2.2, 0.45)
+material = SubResource("ShelfWood")
+
+[node name="Divider4" type="CSGBox3D" parent="ReadingRoom/Shelves/NorthWallShelves/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.58, 1.1, -7.675)
+size = Vector3(0.04, 2.2, 0.45)
+material = SubResource("ShelfWood")
+
+[node name="Divider5" type="CSGBox3D" parent="ReadingRoom/Shelves/NorthWallShelves/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.58, 1.1, -7.675)
+size = Vector3(0.04, 2.2, 0.45)
+material = SubResource("ShelfWood")
+
+[node name="Divider6" type="CSGBox3D" parent="ReadingRoom/Shelves/NorthWallShelves/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.42, 1.1, -7.675)
+size = Vector3(0.04, 2.2, 0.45)
+material = SubResource("ShelfWood")
+
+[node name="Divider7" type="CSGBox3D" parent="ReadingRoom/Shelves/NorthWallShelves/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.38, 1.1, -7.675)
+size = Vector3(0.04, 2.2, 0.45)
+material = SubResource("ShelfWood")
+
+[node name="Books" type="Node3D" parent="ReadingRoom/Shelves/NorthWallShelves"]
+
+[node name="Unit1_L1A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.075, 0.28, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookRed")
+
+[node name="Unit1_L1B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.01, 0.25, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookOchre")
+
+[node name="Unit1_L2A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.19, 0.77, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookGreen")
+
+[node name="Unit1_L2B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.185, 0.8, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookPlum")
+
+[node name="Unit1_L3A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.075, 1.32, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookCream")
+
+[node name="Unit1_L3B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.01, 1.29, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookBlue")
+
+[node name="Unit1_L4A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.19, 1.81, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookRed")
+
+[node name="Unit1_L4B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.185, 1.84, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookOchre")
+
+[node name="Unit2_L1A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.075, 0.28, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookGreen")
+
+[node name="Unit2_L1B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.01, 0.25, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookPlum")
+
+[node name="Unit2_L2A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.19, 0.77, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookCream")
+
+[node name="Unit2_L2B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.185, 0.8, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookBlue")
+
+[node name="Unit2_L3A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.075, 1.32, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookRed")
+
+[node name="Unit2_L3B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.01, 1.29, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookOchre")
+
+[node name="Unit2_L4A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.19, 1.81, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookGreen")
+
+[node name="Unit2_L4B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.185, 1.84, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookPlum")
+
+[node name="Unit3_L1A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.075, 0.28, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookCream")
+
+[node name="Unit3_L1B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.01, 0.25, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookBlue")
+
+[node name="Unit3_L2A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.19, 0.77, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookRed")
+
+[node name="Unit3_L2B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.185, 0.8, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookOchre")
+
+[node name="Unit3_L3A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.075, 1.32, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookGreen")
+
+[node name="Unit3_L3B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.01, 1.29, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookPlum")
+
+[node name="Unit3_L4A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.19, 1.81, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookCream")
+
+[node name="Unit3_L4B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.185, 1.84, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookBlue")
+
+[node name="Unit4_L1A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.19, 0.25, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookRed")
+
+[node name="Unit4_L1B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.125, 0.28, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookOchre")
+
+[node name="Unit4_L2A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.075, 0.8, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookGreen")
+
+[node name="Unit4_L2B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.07, 0.77, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookPlum")
+
+[node name="Unit4_L3A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.19, 1.29, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookCream")
+
+[node name="Unit4_L3B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.125, 1.32, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookBlue")
+
+[node name="Unit4_L4A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.075, 1.84, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookRed")
+
+[node name="Unit4_L4B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.07, 1.81, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookOchre")
+
+[node name="Unit5_L1A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.19, 0.25, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookGreen")
+
+[node name="Unit5_L1B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.125, 0.28, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookPlum")
+
+[node name="Unit5_L2A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.075, 0.8, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookCream")
+
+[node name="Unit5_L2B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.07, 0.77, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookBlue")
+
+[node name="Unit5_L3A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.19, 1.29, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookRed")
+
+[node name="Unit5_L3B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.125, 1.32, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookOchre")
+
+[node name="Unit5_L4A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.075, 1.84, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookGreen")
+
+[node name="Unit5_L4B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.07, 1.81, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookPlum")
+
+[node name="Unit6_L1A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.925, 0.28, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookCream")
+
+[node name="Unit6_L1B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.99, 0.25, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookBlue")
+
+[node name="Unit6_L2A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.81, 0.77, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookRed")
+
+[node name="Unit6_L2B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.815, 0.8, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookOchre")
+
+[node name="Unit6_L3A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.925, 1.32, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookGreen")
+
+[node name="Unit6_L3B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.99, 1.29, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookPlum")
+
+[node name="Unit6_L4A" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.81, 1.81, -7.66)
+mesh = SubResource("BooksWallShort")
+material_override = SubResource("BookCream")
+
+[node name="Unit6_L4B" type="MeshInstance3D" parent="ReadingRoom/Shelves/NorthWallShelves/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.815, 1.84, -7.66)
+mesh = SubResource("BooksWallLong")
+material_override = SubResource("BookBlue")
+
+[node name="ShelfRowNorth" type="Node3D" parent="ReadingRoom/Shelves"]
+
+[node name="Collision" type="StaticBody3D" parent="ReadingRoom/Shelves/ShelfRowNorth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 1.1, -5)
+
+[node name="Shape" type="CollisionShape3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Collision"]
+shape = SubResource("RowShelfShape")
+
+[node name="Frame" type="Node3D" parent="ReadingRoom/Shelves/ShelfRowNorth"]
+
+[node name="Spine" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 1.1, -5)
+size = Vector3(5.1, 2.2, 0.02)
+material = SubResource("ShelfWood")
+
+[node name="Plinth" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 0.05, -5)
+size = Vector3(5.1, 0.1, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Board1" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 0.6, -5)
+size = Vector3(5.1, 0.04, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Board2" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 1.12, -5)
+size = Vector3(5.1, 0.04, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Board3" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 1.64, -5)
+size = Vector3(5.1, 0.04, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Top" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 2.18, -5)
+size = Vector3(5.1, 0.04, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Divider1" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.58, 1.1, -5)
+size = Vector3(0.04, 2.2, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Divider2" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.88, 1.1, -5)
+size = Vector3(0.04, 2.2, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Divider3" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.18, 1.1, -5)
+size = Vector3(0.04, 2.2, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Divider4" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.52, 1.1, -5)
+size = Vector3(0.04, 2.2, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Books" type="Node3D" parent="ReadingRoom/Shelves/ShelfRowNorth"]
+
+[node name="Unit1_L1A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.29, 0.265, -5)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookRed")
+
+[node name="Unit1_L1B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.75, 0.28, -5)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookBlue")
+
+[node name="Unit1_L1C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.24, 0.25, -5)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookGreen")
+
+[node name="Unit1_L2A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.28, 0.77, -5)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookOchre")
+
+[node name="Unit1_L2B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.77, 0.785, -5)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookCream")
+
+[node name="Unit1_L2C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.18, 0.8, -5)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookPlum")
+
+[node name="Unit1_L3A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.29, 1.32, -5)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookRed")
+
+[node name="Unit1_L3B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.8, 1.29, -5)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookBlue")
+
+[node name="Unit1_L3C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.34, 1.305, -5)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookGreen")
+
+[node name="Unit1_L4A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.29, 1.825, -5)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookOchre")
+
+[node name="Unit1_L4B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.75, 1.84, -5)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookCream")
+
+[node name="Unit1_L4C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.24, 1.81, -5)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookPlum")
+
+[node name="Unit2_L1A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.58, 0.25, -5)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookRed")
+
+[node name="Unit2_L1B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.07, 0.265, -5)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookBlue")
+
+[node name="Unit2_L1C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.48, 0.28, -5)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookGreen")
+
+[node name="Unit2_L2A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.59, 0.8, -5)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookOchre")
+
+[node name="Unit2_L2B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.1, 0.77, -5)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookCream")
+
+[node name="Unit2_L2C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.64, 0.785, -5)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookPlum")
+
+[node name="Unit2_L3A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.59, 1.305, -5)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookRed")
+
+[node name="Unit2_L3B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 1.32, -5)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookBlue")
+
+[node name="Unit2_L3C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.54, 1.29, -5)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookGreen")
+
+[node name="Unit2_L4A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.58, 1.81, -5)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookOchre")
+
+[node name="Unit2_L4B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.07, 1.825, -5)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookCream")
+
+[node name="Unit2_L4C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.48, 1.84, -5)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookPlum")
+
+[node name="Unit3_L1A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.89, 0.28, -5)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookRed")
+
+[node name="Unit3_L1B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.4, 0.25, -5)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookBlue")
+
+[node name="Unit3_L1C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.94, 0.265, -5)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookGreen")
+
+[node name="Unit3_L2A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.89, 0.785, -5)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookOchre")
+
+[node name="Unit3_L2B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.35, 0.8, -5)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookCream")
+
+[node name="Unit3_L2C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.84, 0.77, -5)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookPlum")
+
+[node name="Unit3_L3A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.88, 1.29, -5)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookRed")
+
+[node name="Unit3_L3B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.37, 1.305, -5)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookBlue")
+
+[node name="Unit3_L3C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.78, 1.32, -5)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookGreen")
+
+[node name="Unit3_L4A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.89, 1.84, -5)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookOchre")
+
+[node name="Unit3_L4B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.4, 1.81, -5)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookCream")
+
+[node name="Unit3_L4C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowNorth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.94, 1.825, -5)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookPlum")
+
+[node name="ShelfRowSouth" type="Node3D" parent="ReadingRoom/Shelves"]
+
+[node name="Collision" type="StaticBody3D" parent="ReadingRoom/Shelves/ShelfRowSouth"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 1.1, -2.3)
+
+[node name="Shape" type="CollisionShape3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Collision"]
+shape = SubResource("RowShelfShape")
+
+[node name="Frame" type="Node3D" parent="ReadingRoom/Shelves/ShelfRowSouth"]
+
+[node name="Spine" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 1.1, -2.3)
+size = Vector3(5.1, 2.2, 0.02)
+material = SubResource("ShelfWood")
+
+[node name="Plinth" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 0.05, -2.3)
+size = Vector3(5.1, 0.1, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Board1" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 0.6, -2.3)
+size = Vector3(5.1, 0.04, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Board2" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 1.12, -2.3)
+size = Vector3(5.1, 0.04, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Board3" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 1.64, -2.3)
+size = Vector3(5.1, 0.04, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Top" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 2.18, -2.3)
+size = Vector3(5.1, 0.04, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Divider1" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.58, 1.1, -2.3)
+size = Vector3(0.04, 2.2, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Divider2" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.88, 1.1, -2.3)
+size = Vector3(0.04, 2.2, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Divider3" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.18, 1.1, -2.3)
+size = Vector3(0.04, 2.2, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Divider4" type="CSGBox3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Frame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.52, 1.1, -2.3)
+size = Vector3(0.04, 2.2, 0.6)
+material = SubResource("ShelfWood")
+
+[node name="Books" type="Node3D" parent="ReadingRoom/Shelves/ShelfRowSouth"]
+
+[node name="Unit1_L1A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.29, 0.28, -2.3)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookRed")
+
+[node name="Unit1_L1B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.8, 0.25, -2.3)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookBlue")
+
+[node name="Unit1_L1C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.34, 0.265, -2.3)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookGreen")
+
+[node name="Unit1_L2A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.29, 0.785, -2.3)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookOchre")
+
+[node name="Unit1_L2B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.75, 0.8, -2.3)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookCream")
+
+[node name="Unit1_L2C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.24, 0.77, -2.3)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookPlum")
+
+[node name="Unit1_L3A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.28, 1.29, -2.3)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookRed")
+
+[node name="Unit1_L3B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.77, 1.305, -2.3)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookBlue")
+
+[node name="Unit1_L3C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.18, 1.32, -2.3)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookGreen")
+
+[node name="Unit1_L4A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.29, 1.84, -2.3)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookOchre")
+
+[node name="Unit1_L4B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.8, 1.81, -2.3)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookCream")
+
+[node name="Unit1_L4C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.34, 1.825, -2.3)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookPlum")
+
+[node name="Unit2_L1A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.59, 0.265, -2.3)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookRed")
+
+[node name="Unit2_L1B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 0.28, -2.3)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookBlue")
+
+[node name="Unit2_L1C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.54, 0.25, -2.3)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookGreen")
+
+[node name="Unit2_L2A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.58, 0.77, -2.3)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookOchre")
+
+[node name="Unit2_L2B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.07, 0.785, -2.3)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookCream")
+
+[node name="Unit2_L2C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.48, 0.8, -2.3)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookPlum")
+
+[node name="Unit2_L3A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.59, 1.32, -2.3)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookRed")
+
+[node name="Unit2_L3B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.1, 1.29, -2.3)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookBlue")
+
+[node name="Unit2_L3C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.64, 1.305, -2.3)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookGreen")
+
+[node name="Unit2_L4A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.59, 1.825, -2.3)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookOchre")
+
+[node name="Unit2_L4B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 1.84, -2.3)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookCream")
+
+[node name="Unit2_L4C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.54, 1.81, -2.3)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookPlum")
+
+[node name="Unit3_L1A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.88, 0.25, -2.3)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookRed")
+
+[node name="Unit3_L1B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.37, 0.265, -2.3)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookBlue")
+
+[node name="Unit3_L1C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.78, 0.28, -2.3)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookGreen")
+
+[node name="Unit3_L2A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.89, 0.8, -2.3)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookOchre")
+
+[node name="Unit3_L2B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.4, 0.77, -2.3)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookCream")
+
+[node name="Unit3_L2C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.94, 0.785, -2.3)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookPlum")
+
+[node name="Unit3_L3A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.89, 1.305, -2.3)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookRed")
+
+[node name="Unit3_L3B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.35, 1.32, -2.3)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookBlue")
+
+[node name="Unit3_L3C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.84, 1.29, -2.3)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookGreen")
+
+[node name="Unit3_L4A" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.88, 1.81, -2.3)
+mesh = SubResource("BooksRowB")
+material_override = SubResource("BookOchre")
+
+[node name="Unit3_L4B" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.37, 1.825, -2.3)
+mesh = SubResource("BooksRowC")
+material_override = SubResource("BookCream")
+
+[node name="Unit3_L4C" type="MeshInstance3D" parent="ReadingRoom/Shelves/ShelfRowSouth/Books"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.78, 1.84, -2.3)
+mesh = SubResource("BooksRowA")
+material_override = SubResource("BookPlum")
+
+[node name="Furniture" type="Node3D" parent="ReadingRoom"]
+
+[node name="ReadingTableWest" type="Node3D" parent="ReadingRoom/Furniture"]
+
+[node name="Top" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.45, 0.74, -4.6)
+use_collision = true
+size = Vector3(1.6, 0.05, 0.9)
+material = SubResource("LightWood")
+
+[node name="LegPanelWest" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.15, 0.36, -4.6)
+size = Vector3(0.06, 0.72, 0.75)
+material = SubResource("LightWood")
+
+[node name="LegPanelEast" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.75, 0.36, -4.6)
+size = Vector3(0.06, 0.72, 0.75)
+material = SubResource("LightWood")
+
+[node name="LampBase" type="MeshInstance3D" parent="ReadingRoom/Furniture/ReadingTableWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.45, 0.8, -4.75)
+mesh = SubResource("BookFlat")
+material_override = SubResource("Metal")
+
+[node name="LampShade" type="MeshInstance3D" parent="ReadingRoom/Furniture/ReadingTableWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.45, 1.07, -4.75)
+mesh = SubResource("BankerShade")
+material_override = SubResource("LampGlow")
+
+[node name="OpenBook" type="MeshInstance3D" parent="ReadingRoom/Furniture/ReadingTableWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.9, 0.795, -4.48)
+mesh = SubResource("BookFlat")
+material_override = SubResource("BookGreen")
+
+[node name="ChairN1" type="Node3D" parent="ReadingRoom/Furniture/ReadingTableWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.85, 0, -5.32)
+
+[node name="Seat" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableWest/ChairN1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.23, 0)
+use_collision = true
+size = Vector3(0.46, 0.46, 0.46)
+material = SubResource("LightWood")
+
+[node name="Back" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableWest/ChairN1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, -0.205)
+use_collision = true
+size = Vector3(0.46, 0.5, 0.05)
+material = SubResource("LightWood")
+
+[node name="ChairS1" type="Node3D" parent="ReadingRoom/Furniture/ReadingTableWest"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -1.85, 0, -3.88)
+
+[node name="Seat" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableWest/ChairS1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.23, 0)
+use_collision = true
+size = Vector3(0.46, 0.46, 0.46)
+material = SubResource("LightWood")
+
+[node name="Back" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableWest/ChairS1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, -0.205)
+use_collision = true
+size = Vector3(0.46, 0.5, 0.05)
+material = SubResource("LightWood")
+
+[node name="ChairN2" type="Node3D" parent="ReadingRoom/Furniture/ReadingTableWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.05, 0, -5.32)
+
+[node name="Seat" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableWest/ChairN2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.23, 0)
+use_collision = true
+size = Vector3(0.46, 0.46, 0.46)
+material = SubResource("LightWood")
+
+[node name="Back" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableWest/ChairN2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, -0.205)
+use_collision = true
+size = Vector3(0.46, 0.5, 0.05)
+material = SubResource("LightWood")
+
+[node name="ChairS2" type="Node3D" parent="ReadingRoom/Furniture/ReadingTableWest"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -1.05, 0, -3.88)
+
+[node name="Seat" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableWest/ChairS2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.23, 0)
+use_collision = true
+size = Vector3(0.46, 0.46, 0.46)
+material = SubResource("LightWood")
+
+[node name="Back" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableWest/ChairS2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, -0.205)
+use_collision = true
+size = Vector3(0.46, 0.5, 0.05)
+material = SubResource("LightWood")
+
+[node name="ReadingTableEast" type="Node3D" parent="ReadingRoom/Furniture"]
+
+[node name="Top" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, 0.74, -4.6)
+use_collision = true
+size = Vector3(1.6, 0.05, 0.9)
+material = SubResource("LightWood")
+
+[node name="LegPanelWest" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15, 0.36, -4.6)
+size = Vector3(0.06, 0.72, 0.75)
+material = SubResource("LightWood")
+
+[node name="LegPanelEast" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.25, 0.36, -4.6)
+size = Vector3(0.06, 0.72, 0.75)
+material = SubResource("LightWood")
+
+[node name="LampBase" type="MeshInstance3D" parent="ReadingRoom/Furniture/ReadingTableEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, 0.8, -4.75)
+mesh = SubResource("BookFlat")
+material_override = SubResource("Metal")
+
+[node name="LampShade" type="MeshInstance3D" parent="ReadingRoom/Furniture/ReadingTableEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, 1.07, -4.75)
+mesh = SubResource("BankerShade")
+material_override = SubResource("LampGlow")
+
+[node name="OpenBook" type="MeshInstance3D" parent="ReadingRoom/Furniture/ReadingTableEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, 0.795, -4.48)
+mesh = SubResource("BookFlat")
+material_override = SubResource("BookBlue")
+
+[node name="ChairN1" type="Node3D" parent="ReadingRoom/Furniture/ReadingTableEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.15, 0, -5.32)
+
+[node name="Seat" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableEast/ChairN1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.23, 0)
+use_collision = true
+size = Vector3(0.46, 0.46, 0.46)
+material = SubResource("LightWood")
+
+[node name="Back" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableEast/ChairN1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, -0.205)
+use_collision = true
+size = Vector3(0.46, 0.5, 0.05)
+material = SubResource("LightWood")
+
+[node name="ChairS1" type="Node3D" parent="ReadingRoom/Furniture/ReadingTableEast"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0.15, 0, -3.88)
+
+[node name="Seat" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableEast/ChairS1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.23, 0)
+use_collision = true
+size = Vector3(0.46, 0.46, 0.46)
+material = SubResource("LightWood")
+
+[node name="Back" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableEast/ChairS1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, -0.205)
+use_collision = true
+size = Vector3(0.46, 0.5, 0.05)
+material = SubResource("LightWood")
+
+[node name="ChairN2" type="Node3D" parent="ReadingRoom/Furniture/ReadingTableEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.95, 0, -5.32)
+
+[node name="Seat" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableEast/ChairN2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.23, 0)
+use_collision = true
+size = Vector3(0.46, 0.46, 0.46)
+material = SubResource("LightWood")
+
+[node name="Back" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableEast/ChairN2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, -0.205)
+use_collision = true
+size = Vector3(0.46, 0.5, 0.05)
+material = SubResource("LightWood")
+
+[node name="ChairS2" type="Node3D" parent="ReadingRoom/Furniture/ReadingTableEast"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0.95, 0, -3.88)
+
+[node name="Seat" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableEast/ChairS2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.23, 0)
+use_collision = true
+size = Vector3(0.46, 0.46, 0.46)
+material = SubResource("LightWood")
+
+[node name="Back" type="CSGBox3D" parent="ReadingRoom/Furniture/ReadingTableEast/ChairS2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, -0.205)
+use_collision = true
+size = Vector3(0.46, 0.5, 0.05)
+material = SubResource("LightWood")
+
+[node name="ReadingNook" type="Node3D" parent="ReadingRoom"]
+
+[node name="Rug" type="MeshInstance3D" parent="ReadingRoom/ReadingNook"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.9, 0.005, -4.8)
+mesh = SubResource("RugNook")
+material_override = SubResource("RugWarm")
+
+[node name="Armchair" type="Node3D" parent="ReadingRoom/ReadingNook"]
+transform = Transform3D(-0.707, 0, 0.707, 0, 1, 0, -0.707, 0, -0.707, 3.1, 0, -4.4)
+
+[node name="Base" type="CSGBox3D" parent="ReadingRoom/ReadingNook/Armchair"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.21, 0)
+use_collision = true
+size = Vector3(0.95, 0.42, 0.85)
+material = SubResource("Fabric")
+
+[node name="Back" type="CSGBox3D" parent="ReadingRoom/ReadingNook/Armchair"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.74, -0.33)
+use_collision = true
+size = Vector3(0.95, 0.64, 0.2)
+material = SubResource("Fabric")
+
+[node name="ArmLeft" type="CSGBox3D" parent="ReadingRoom/ReadingNook/Armchair"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 0.53, 0.02)
+use_collision = true
+size = Vector3(0.16, 0.24, 0.8)
+material = SubResource("Fabric")
+
+[node name="ArmRight" type="CSGBox3D" parent="ReadingRoom/ReadingNook/Armchair"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.4, 0.53, 0.02)
+use_collision = true
+size = Vector3(0.16, 0.24, 0.8)
+material = SubResource("Fabric")
+
+[node name="SideTable" type="Node3D" parent="ReadingRoom/ReadingNook"]
+
+[node name="Top" type="CSGCylinder3D" parent="ReadingRoom/ReadingNook/SideTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.55, 0.275, -5.25)
+use_collision = true
+radius = 0.3
+height = 0.55
+sides = 16
+material = SubResource("LightWood")
+
+[node name="BookStack" type="MeshInstance3D" parent="ReadingRoom/ReadingNook/SideTable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.55, 0.58, -5.25)
+mesh = SubResource("BookFlat")
+material_override = SubResource("BookBlue")
+
+[node name="FloorLamp" type="Node3D" parent="ReadingRoom/ReadingNook"]
+
+[node name="Base" type="CSGCylinder3D" parent="ReadingRoom/ReadingNook/FloorLamp"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.15, 0.02, -4.2)
+radius = 0.2
+height = 0.04
+sides = 16
+material = SubResource("Metal")
+
+[node name="Pole" type="CSGCylinder3D" parent="ReadingRoom/ReadingNook/FloorLamp"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.15, 0.75, -4.2)
+use_collision = true
+radius = 0.03
+height = 1.45
+sides = 16
+material = SubResource("Metal")
+
+[node name="Shade" type="CSGCylinder3D" parent="ReadingRoom/ReadingNook/FloorLamp"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.15, 1.55, -4.2)
+radius = 0.24
+height = 0.32
+sides = 16
+material = SubResource("LampGlow")
+
+[node name="Cabinet" type="Node3D" parent="ReadingRoom/ReadingNook"]
+
+[node name="Body" type="CSGBox3D" parent="ReadingRoom/ReadingNook/Cabinet"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.2, 0.45, -7.65)
+use_collision = true
+size = Vector3(1.8, 0.9, 0.5)
+material = SubResource("ShelfWood")
+
+[node name="PlantPot" type="CSGCylinder3D" parent="ReadingRoom/ReadingNook/Cabinet"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.65, 1.05, -7.65)
+radius = 0.16
+height = 0.3
+sides = 16
+material = SubResource("Pot")
+
+[node name="PlantLeaves" type="MeshInstance3D" parent="ReadingRoom/ReadingNook/Cabinet"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.65, 1.5, -7.65)
+mesh = SubResource("Foliage")
+material_override = SubResource("Plant")
+
+[node name="BookRow" type="MeshInstance3D" parent="ReadingRoom/ReadingNook/Cabinet"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.55, 0.93, -7.65)
+mesh = SubResource("BookFlat")
+material_override = SubResource("BookOchre")
+
+[node name="Gallery" type="Node3D" parent="."]
+
+[node name="Furniture" type="Node3D" parent="Gallery"]
+
+[node name="Runner" type="MeshInstance3D" parent="Gallery/Furniture"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.005, 4.7)
+mesh = SubResource("RugGallery")
+material_override = SubResource("RugCool")
+
+[node name="BenchWest" type="Node3D" parent="Gallery/Furniture"]
+
+[node name="Seat" type="CSGBox3D" parent="Gallery/Furniture/BenchWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.5, 0.43, 4.7)
+use_collision = true
+size = Vector3(1.9, 0.07, 0.5)
+material = SubResource("LightWood")
+
+[node name="LegWest" type="CSGBox3D" parent="Gallery/Furniture/BenchWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.3, 0.2, 4.7)
+size = Vector3(0.08, 0.4, 0.44)
+material = SubResource("Metal")
+
+[node name="LegEast" type="CSGBox3D" parent="Gallery/Furniture/BenchWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.7, 0.2, 4.7)
+size = Vector3(0.08, 0.4, 0.44)
+material = SubResource("Metal")
+
+[node name="BenchEast" type="Node3D" parent="Gallery/Furniture"]
+
+[node name="Seat" type="CSGBox3D" parent="Gallery/Furniture/BenchEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 0.43, 4.7)
+use_collision = true
+size = Vector3(1.9, 0.07, 0.5)
+material = SubResource("LightWood")
+
+[node name="LegWest" type="CSGBox3D" parent="Gallery/Furniture/BenchEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.7, 0.2, 4.7)
+size = Vector3(0.08, 0.4, 0.44)
+material = SubResource("Metal")
+
+[node name="LegEast" type="CSGBox3D" parent="Gallery/Furniture/BenchEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.3, 0.2, 4.7)
+size = Vector3(0.08, 0.4, 0.44)
+material = SubResource("Metal")
+
+[node name="PlantSouthWest" type="Node3D" parent="Gallery/Furniture"]
+
+[node name="Pot" type="CSGCylinder3D" parent="Gallery/Furniture/PlantSouthWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.4, 0.25, 7.35)
+use_collision = true
+radius = 0.26
+height = 0.5
+sides = 16
+material = SubResource("Pot")
+
+[node name="Leaves" type="MeshInstance3D" parent="Gallery/Furniture/PlantSouthWest"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.4, 1.05, 7.35)
+mesh = SubResource("Foliage")
+material_override = SubResource("Plant")
+
+[node name="PlantSouthEast" type="Node3D" parent="Gallery/Furniture"]
+
+[node name="Pot" type="CSGCylinder3D" parent="Gallery/Furniture/PlantSouthEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.4, 0.25, 7.35)
+use_collision = true
+radius = 0.26
+height = 0.5
+sides = 16
+material = SubResource("Pot")
+
+[node name="Leaves" type="MeshInstance3D" parent="Gallery/Furniture/PlantSouthEast"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.4, 1.05, 7.35)
+mesh = SubResource("Foliage")
+material_override = SubResource("Plant")
+
+[node name="Stations" type="Node3D" parent="."]
+
+[node name="Station_Shelf_1" type="Node3D" parent="Stations"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.75, 1.4, -1.95)
+
+[node name="Frame" type="MeshInstance3D" parent="Stations/Station_Shelf_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.13, -0.025)
+mesh = SubResource("ComicRackFrame")
+material_override = SubResource("ShelfWood")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Shelf_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.001)
+mesh = SubResource("ComicRackSurface")
+material_override = SubResource("Surface")
+
+[node name="Label" type="Label3D" parent="Stations/Station_Shelf_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.58, 0.01)
+pixel_size = 0.003
+text = "COMICS"
+double_sided = false
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="Station_Shelf_2" type="Node3D" parent="Stations"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 1.4, -1.95)
+
+[node name="Frame" type="MeshInstance3D" parent="Stations/Station_Shelf_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.13, -0.025)
+mesh = SubResource("ComicRackFrame")
+material_override = SubResource("ShelfWood")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Shelf_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.001)
+mesh = SubResource("ComicRackSurface")
+material_override = SubResource("Surface")
+
+[node name="Label" type="Label3D" parent="Stations/Station_Shelf_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.58, 0.01)
+pixel_size = 0.003
+text = "COMICS"
+double_sided = false
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="Station_Shelf_3" type="Node3D" parent="Stations"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.35, 1.4, -1.95)
+
+[node name="Frame" type="MeshInstance3D" parent="Stations/Station_Shelf_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.13, -0.025)
+mesh = SubResource("ComicRackFrame")
+material_override = SubResource("ShelfWood")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Shelf_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.001)
+mesh = SubResource("ComicRackSurface")
+material_override = SubResource("Surface")
+
+[node name="Label" type="Label3D" parent="Stations/Station_Shelf_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.58, 0.01)
+pixel_size = 0.003
+text = "COMICS"
+double_sided = false
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="Station_Gallery_1" type="Node3D" parent="Stations"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -7, 1.6, 7.93)
+
+[node name="Frame" type="MeshInstance3D" parent="Stations/Station_Gallery_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04)
+mesh = SubResource("GalleryFrame")
+material_override = SubResource("GildedFrame")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Gallery_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.001)
+mesh = SubResource("GalleryCanvas")
+material_override = SubResource("Surface")
+
+[node name="Label" type="Label3D" parent="Stations/Station_Gallery_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.8, 0)
+pixel_size = 0.003
+text = "GALLERY 1"
+double_sided = false
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="Station_Gallery_2" type="Node3D" parent="Stations"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -3.5, 1.6, 7.93)
+
+[node name="Frame" type="MeshInstance3D" parent="Stations/Station_Gallery_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04)
+mesh = SubResource("GalleryFrame")
+material_override = SubResource("GildedFrame")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Gallery_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.001)
+mesh = SubResource("GalleryCanvas")
+material_override = SubResource("Surface")
+
+[node name="Label" type="Label3D" parent="Stations/Station_Gallery_2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.8, 0)
+pixel_size = 0.003
+text = "GALLERY 2"
+double_sided = false
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="Station_Gallery_3" type="Node3D" parent="Stations"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.6, 7.93)
+
+[node name="Frame" type="MeshInstance3D" parent="Stations/Station_Gallery_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04)
+mesh = SubResource("GalleryFrame")
+material_override = SubResource("GildedFrame")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Gallery_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.001)
+mesh = SubResource("GalleryCanvas")
+material_override = SubResource("Surface")
+
+[node name="Label" type="Label3D" parent="Stations/Station_Gallery_3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.8, 0)
+pixel_size = 0.003
+text = "GALLERY 3"
+double_sided = false
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="Station_Gallery_4" type="Node3D" parent="Stations"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 3.5, 1.6, 7.93)
+
+[node name="Frame" type="MeshInstance3D" parent="Stations/Station_Gallery_4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04)
+mesh = SubResource("GalleryFrame")
+material_override = SubResource("GildedFrame")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Gallery_4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.001)
+mesh = SubResource("GalleryCanvas")
+material_override = SubResource("Surface")
+
+[node name="Label" type="Label3D" parent="Stations/Station_Gallery_4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.8, 0)
+pixel_size = 0.003
+text = "GALLERY 4"
+double_sided = false
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="Station_Gallery_5" type="Node3D" parent="Stations"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 7, 1.6, 7.93)
+
+[node name="Frame" type="MeshInstance3D" parent="Stations/Station_Gallery_5"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04)
+mesh = SubResource("GalleryFrame")
+material_override = SubResource("GildedFrame")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Gallery_5"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.001)
+mesh = SubResource("GalleryCanvas")
+material_override = SubResource("Surface")
+
+[node name="Label" type="Label3D" parent="Stations/Station_Gallery_5"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.8, 0)
+pixel_size = 0.003
+text = "GALLERY 5"
+double_sided = false
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="Station_Gallery_6" type="Node3D" parent="Stations"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -9.93, 1.6, 4.9)
+
+[node name="Frame" type="MeshInstance3D" parent="Stations/Station_Gallery_6"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04)
+mesh = SubResource("GalleryFrame")
+material_override = SubResource("GildedFrame")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Gallery_6"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.001)
+mesh = SubResource("GalleryCanvas")
+material_override = SubResource("Surface")
+
+[node name="Label" type="Label3D" parent="Stations/Station_Gallery_6"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.8, 0)
+pixel_size = 0.003
+text = "GALLERY 6"
+double_sided = false
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="Station_Gallery_7" type="Node3D" parent="Stations"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 9.93, 1.6, 5.2)
+
+[node name="Frame" type="MeshInstance3D" parent="Stations/Station_Gallery_7"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04)
+mesh = SubResource("GalleryFrame")
+material_override = SubResource("GildedFrame")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Gallery_7"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.001)
+mesh = SubResource("GalleryCanvas")
+material_override = SubResource("Surface")
+
+[node name="Label" type="Label3D" parent="Stations/Station_Gallery_7"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.8, 0)
+pixel_size = 0.003
+text = "GALLERY 7"
+double_sided = false
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="Station_Reader_1" type="Node3D" parent="Stations"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.2, 1.45, -5.4)
+
+[node name="Stand" type="CSGBox3D" parent="Stations/Station_Reader_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04)
+use_collision = true
+size = Vector3(1.32, 1.72, 0.06)
+material = SubResource("ShelfWood")
+
+[node name="LegLeft" type="CSGBox3D" parent="Stations/Station_Reader_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.58, -1.15, -0.04)
+size = Vector3(0.06, 0.6, 0.06)
+material = SubResource("ShelfWood")
+
+[node name="LegRight" type="CSGBox3D" parent="Stations/Station_Reader_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.58, -1.15, -0.04)
+size = Vector3(0.06, 0.6, 0.06)
+material = SubResource("ShelfWood")
+
+[node name="Foot" type="CSGBox3D" parent="Stations/Station_Reader_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.43, -0.04)
+use_collision = true
+size = Vector3(1.4, 0.04, 0.5)
+material = SubResource("ShelfWood")
+
+[node name="Surface" type="MeshInstance3D" parent="Stations/Station_Reader_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.001)
+mesh = SubResource("ReaderSurface")
+material_override = SubResource("Surface")
+
+[node name="Label" type="Label3D" parent="Stations/Station_Reader_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.98, 0)
+pixel_size = 0.003
+text = "COMIC READER"
+double_sided = false
+font_size = 64
+outline_size = 12
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="ViewPoint" type="Marker3D" parent="Stations/Station_Reader_1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 1.2)
+
+[node name="Signs" type="Node3D" parent="."]
+
+[node name="ReadingRoomSign" type="Node3D" parent="Signs"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 2, 2.92, -3.2)
+
+[node name="Board" type="MeshInstance3D" parent="Signs/ReadingRoomSign"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("SignBoardMesh")
+material_override = SubResource("SignBoard")
+
+[node name="Front" type="Label3D" parent="Signs/ReadingRoomSign"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.03)
+pixel_size = 0.003
+text = "READING ROOM"
+double_sided = false
+font_size = 96
+outline_size = 16
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="Back" type="Label3D" parent="Signs/ReadingRoomSign"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, -0.03)
+pixel_size = 0.003
+text = "READING ROOM"
+double_sided = false
+font_size = 96
+outline_size = 16
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="RodLeft" type="MeshInstance3D" parent="Signs/ReadingRoomSign"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1, 0.58, 0)
+mesh = SubResource("HangRod")
+material_override = SubResource("Metal")
+
+[node name="RodRight" type="MeshInstance3D" parent="Signs/ReadingRoomSign"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, 0.58, 0)
+mesh = SubResource("HangRod")
+material_override = SubResource("Metal")
+
+[node name="GallerySign" type="Node3D" parent="Signs"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 2, 2.92, 4.4)
+
+[node name="Board" type="MeshInstance3D" parent="Signs/GallerySign"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("SignBoardMesh")
+material_override = SubResource("SignBoard")
+
+[node name="Front" type="Label3D" parent="Signs/GallerySign"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.03)
+pixel_size = 0.003
+text = "GALLERY"
+double_sided = false
+font_size = 96
+outline_size = 16
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="Back" type="Label3D" parent="Signs/GallerySign"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, -0.03)
+pixel_size = 0.003
+text = "GALLERY"
+double_sided = false
+font_size = 96
+outline_size = 16
+modulate = Color(1, 0.95, 0.82, 1)
+outline_modulate = Color(0.05, 0.04, 0.03, 1)
+
+[node name="RodLeft" type="MeshInstance3D" parent="Signs/GallerySign"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1, 0.58, 0)
+mesh = SubResource("HangRod")
+material_override = SubResource("Metal")
+
+[node name="RodRight" type="MeshInstance3D" parent="Signs/GallerySign"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, 0.58, 0)
+mesh = SubResource("HangRod")
+material_override = SubResource("Metal")

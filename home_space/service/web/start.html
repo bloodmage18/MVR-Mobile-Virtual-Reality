@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home Space</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* Built for a 1024x576 CSS viewport (1280x720 at zoom 1.25) seen in a low-res headset:
+     few, huge, high-contrast targets. */
+  :root { --bg: #0d0f14; --tile: #1c2230; --edge: #3a4660; --text: #f4f1ea; --dim: #a9b3c6; --hi: #ffd34d; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 600 30px/1.2 "Segoe UI", Arial, sans-serif; }
+  body { display: flex; flex-direction: column; padding: 22px 28px; gap: 20px; }
+  h1 { margin: 0; font-size: 40px; letter-spacing: 1px; color: var(--hi); }
+  h1 small { font-size: 26px; color: var(--dim); font-weight: 500; margin-left: 14px; }
+  form { display: flex; gap: 14px; }
+  input { flex: 1; font: 600 34px "Segoe UI", Arial, sans-serif; padding: 12px 20px; border-radius: 14px;
+    border: 4px solid var(--edge); background: #f4f1ea; color: #111; min-width: 0; }
+  input:focus { outline: none; border-color: var(--hi); }
+  button { font: 700 32px "Segoe UI", Arial, sans-serif; padding: 0 28px; border-radius: 14px; border: 0;
+    background: var(--hi); color: #111; cursor: pointer; }
+  .grid { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 1fr; gap: 18px; }
+  a.tile { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px;
+    background: var(--tile); border: 4px solid var(--edge); border-radius: 18px; color: var(--text);
+    text-decoration: none; font-size: 36px; text-align: center; padding: 8px; }
+  a.tile:hover, a.tile:focus { border-color: var(--hi); background: #283146; }
+  a.tile .icon { font-size: 54px; line-height: 1; }
+  a.tile .sub { font-size: 22px; color: var(--dim); font-weight: 500; }
+  .yt .icon { color: #ff4040; } .wiki .icon { color: #ffffff; } .toon .icon { color: #00dc64; }
+  .xkcd .icon { color: #9ec3ff; } .news .icon { color: #ffb347; } .maps .icon { color: #6fe08f; }
+</style>
+</head>
+<body>
+  <h1>Home Space Browser <small>Ctrl+L / Y: address bar</small></h1>
+  <form action="/search" method="get">
+    <input name="q" placeholder="Search the web" autocomplete="off">
+    <button type="submit">Search</button>
+  </form>
+  <div class="grid">
+    <a class="tile yt" href="https://www.youtube.com/"><span class="icon">&#9654;</span>YouTube</a>
+    <a class="tile wiki" href="https://en.wikipedia.org/wiki/Special:Random"><span class="icon">W</span>Wikipedia<span class="sub">random article</span></a>
+    <a class="tile toon" href="https://www.webtoons.com/en/"><span class="icon">&#9733;</span>Webtoons</a>
+    <a class="tile xkcd" href="https://xkcd.com/"><span class="icon">&#9998;</span>xkcd</a>
+    <a class="tile news" href="https://news.ycombinator.com/"><span class="icon">Y</span>Hacker News</a>
+    <a class="tile" href="https://www.google.com/"><span class="icon">G</span>Google</a>
+    <a class="tile maps" href="https://www.openstreetmap.org/"><span class="icon">&#9673;</span>Maps</a>
+    <a class="tile" href="/api/health"><span class="icon">&#8962;</span>Library<span class="sub">service status</span></a>
+  </div>
+</body>
+</html>
