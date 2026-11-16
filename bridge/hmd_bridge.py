@@ -380,10 +380,81 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 NO_CACHE = {"Cache-Control": "no-store"}
 
+# --wifi: the bridge is reachable by everything on the home network, so the stream, the pose
+# input and the report need a secret key (?k=...) that only the printed URL carries. It is kept
+# in phone_host/cert/bridge_token.txt (git-ignored) so a home-screen app keeps working.
+ACCESS_KEY: str | None = None
+VIDEO_WS = None      # only one video viewer at a time (each one costs an ffmpeg + encoder)
+
+
+def _key_ok(conn) -> bool:
+    if ACCESS_KEY is None:
+        return True
+    import hmac
+    given = conn.query_params.get("k", "")
+    if not hmac.compare_digest(given.encode(), ACCESS_KEY.encode()):
+        return False
+    origin = conn.headers.get("origin")
+    host = conn.headers.get("host", "")
+    return origin is None or origin == f"https://{host}"   # no cross-site WebSocket use
+
+
+def load_access_key() -> str:
+    import secrets
+    path = HERE.parent / "phone_host" / "cert" / "bridge_token.txt"
+    try:
+        key = path.read_text(encoding="utf-8").strip()
+        if len(key) >= 16:
+            return key
+    except OSError:
+        pass
+    key = secrets.token_urlsafe(16)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(key, encoding="utf-8")
+    return key
+
 
 @app.get("/")
 async def index():
     return FileResponse(WEB_DIR / "hmd.html", headers=NO_CACHE)
+
+
+def _phone_host():
+    """phone_host/server.py: certificate + icon helpers shared with the Wi-Fi test server."""
+    sys.path.insert(0, str(HERE.parent / "phone_host"))
+    import server
+    return server
+
+
+@app.get("/manifest.webmanifest")
+async def manifest(request: Request):
+    # "Add to Home Screen" opens the page as an app: full screen, landscape (needs a trusted cert on iOS)
+    from fastapi.responses import Response
+    if not _key_ok(request):
+        return Response(status_code=403)
+    start = f"/?k={ACCESS_KEY}" if ACCESS_KEY else "/"
+    body = {"name": "Cross Reality HMD", "short_name": "HMD", "start_url": start, "scope": "/",
+            "display": "fullscreen", "orientation": "landscape", "background_color": "#000000",
+            "theme_color": "#000000",
+            "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
+                      {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png"}]}
+    return Response(json.dumps(body), media_type="application/manifest+json")
+
+
+@app.get("/icon-{size}.png")
+async def icon(size: int):
+    from fastapi.responses import Response
+    if size not in (180, 192, 512):
+        return Response(status_code=404)
+    return Response(_phone_host().make_icon(size), media_type="image/png")
+
+
+@app.get("/ca.crt")
+async def ca_crt():
+    # Install once on a phone (and trust it) to drop the certificate warnings for good
+    from fastapi.responses import Response
+    return Response(_phone_host().ca_der(), media_type="application/x-x509-ca-cert",
+                    headers={"Content-Disposition": 'attachment; filename="cross-reality-home-ca.crt"'})
 
 
 @app.get("/check")
@@ -398,6 +469,8 @@ async def config():
 
 @app.post("/api/report")
 async def report(request: Request):
+    if not _key_ok(request):
+        return JSONResponse({"error": "missing or wrong access key"}, status_code=403)
     data = await request.json()
     REPORT_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
     print("\n" + "=" * 60 + "\nSENSOR CHECK REPORT from phone")
@@ -409,6 +482,9 @@ async def report(request: Request):
 
 @app.websocket("/ws/pose")
 async def ws_pose(ws: WebSocket):
+    if not _key_ok(ws):
+        await ws.close(code=1008)
+        return
     await ws.accept()
     print("\n[pose] phone connected")
     POSE_CLIENTS.add(ws)
@@ -432,12 +508,26 @@ async def ws_pose(ws: WebSocket):
 
 @app.websocket("/ws/video")
 async def ws_video(ws: WebSocket):
+    global VIDEO_WS
+    if not _key_ok(ws):
+        await ws.close(code=1008)
+        return
     await ws.accept()
+    old, VIDEO_WS = VIDEO_WS, ws       # a reconnecting phone replaces its old stream
+    if old is not None:
+        try:
+            await old.close()
+        except Exception:
+            pass
     if ARGS.video == "off":
         await ws.send_text(json.dumps({"error": "video is off (start the bridge with --video game|test|desktop|dda)"}))
         await ws.close()
         return
-    await stream_video(ws)
+    try:
+        await stream_video(ws)
+    finally:
+        if VIDEO_WS is ws:
+            VIDEO_WS = None
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
@@ -466,12 +556,36 @@ def main() -> None:
     ap.add_argument("--title", default="Cross Reality HMD", help="game window title prefix for --video game")
     ap.add_argument("--fps", type=int, default=60)
     ap.add_argument("--bitrate", default="8M")
+    ap.add_argument("--wifi", action="store_true",
+                    help="no cable: serve HTTPS on the home Wi-Fi (default port 8444) with the phone_host certificate")
     ARGS = ap.parse_args()
+    if ARGS.wifi and ARGS.port == 8080:
+        ARGS.port = 8444
 
     sys.path.insert(0, str(HERE))
     relay = PoseRelay((ARGS.godot_host, ARGS.godot_port))
-    uvicorn.run(app, host="127.0.0.1", port=ARGS.port, log_level="warning",
-                ws_ping_interval=20, ws_ping_timeout=60)  # tolerate phone hiccups
+    tls = {}
+    host = "127.0.0.1"
+    if ARGS.wifi:
+        # Same self-signed certificate as the phone-hosted test, so a phone that accepted it
+        # there only has to accept it once more for this port (browsers trust per host:port).
+        phone_host_server = _phone_host()
+        ips = phone_host_server.detect_ips()
+        phone_host_server.ensure_cert(ips)
+        tls = dict(ssl_certfile=str(phone_host_server.CERT_FILE), ssl_keyfile=str(phone_host_server.KEY_FILE))
+        host = "0.0.0.0"
+        global ACCESS_KEY
+        ACCESS_KEY = load_access_key()
+        print("=" * 64)
+        print("  WIRELESS: open on the phone (same Wi-Fi) - the key in the address is required:")
+        for ip in ips:
+            print(f"     https://{ip}:{ARGS.port}/?k={ACCESS_KEY}")
+        print("  First time: accept the certificate warning, then tap the start button yourself.")
+        print(f"  No more warnings + iPhone home-screen app full screen: open https://{ips[0] if ips else '<ip>'}:{ARGS.port}/ca.crt")
+        print("  on the phone once and trust it - see phone_host/README.md 'Trust this laptop'.")
+        print("=" * 64)
+    uvicorn.run(app, host=host, port=ARGS.port, log_level="warning",
+                ws_ping_interval=20, ws_ping_timeout=60, **tls)  # tolerate phone hiccups
 
 
 if __name__ == "__main__":
