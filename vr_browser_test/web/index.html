@@ -1,0 +1,3036 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>VR Browser</title>
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VR Browser">
+<style>
+  :root { --bg: #000; --fg: #f0f3f8; --muted: #9aa4b2; --accent: #2f81f7; --ok: #7ee787; --warn: #ffb347; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden;
+               touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+               font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  /* No `inset` (Safari < 14.1) and no 100vh (iOS): the GL buffer is sized from the canvas's real CSS box. */
+  canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  video, audio { position: fixed; width: 2px; height: 2px; left: 0; top: 0; opacity: 0.01; pointer-events: none; }
+  [hidden] { display: none !important; }
+
+  #start { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 5; overflow-y: auto; display: flex; flex-direction: column;
+           align-items: center; justify-content: flex-start; gap: 14px; padding: 16px; text-align: center; background: #05070d; }
+  #start > :first-child { margin-top: auto !important; }
+  #start > :last-child { margin-bottom: auto !important; }
+  #start h1 { margin: 0; font-size: 30px; }
+  #go { font-size: 40px; font-weight: 800; padding: 26px 54px; border: 0; border-radius: 20px;
+        background: var(--accent); color: #fff; letter-spacing: 1px; }
+  #go:active { transform: scale(.97); }
+  #start p { margin: 0; font-size: 18px; color: var(--muted); max-width: 680px; line-height: 1.4; }
+  #start .warn { color: var(--warn); font-weight: 600; }
+
+  .hud { position: fixed; top: 14px; z-index: 3; color: var(--ok); font: 600 16px/1.35 ui-monospace, Menlo, Consolas, monospace;
+         background: rgba(0,0,0,.6); padding: 8px 12px; border-radius: 10px; white-space: pre; pointer-events: none;
+         transform: translateX(-50%); transition: opacity .8s; text-align: center; }
+  .hud.faded { opacity: 0; }
+  #hint { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 4; max-width: 90vw;
+          background: rgba(20,24,34,.92); color: #fff; font-size: 18px; padding: 10px 16px; border-radius: 12px;
+          text-align: center; pointer-events: none; transition: opacity .8s; }
+  #hint.faded { opacity: 0; }
+  #buttons { position: fixed; right: max(8px, env(safe-area-inset-right)); bottom: 8px; z-index: 4; display: flex; gap: 8px; opacity: .35; }
+  #buttons button { font: 600 14px system-ui, sans-serif; padding: 8px 12px; border-radius: 10px; border: 1px solid #556;
+                    background: rgba(10,12,20,.75); color: #dde; }
+  #divider { position: fixed; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: #000; z-index: 2; pointer-events: none; }
+  .cross { position: fixed; top: 50%; z-index: 3; width: 64px; height: 64px; margin: -32px 0 0 -32px; pointer-events: none; }
+  .cross::before, .cross::after { content: ""; position: absolute; background: #ff3; }
+  .cross::before { left: 31px; top: 0; width: 3px; height: 64px; }
+  .cross::after { top: 31px; left: 0; height: 3px; width: 64px; }
+  #lensPanel { position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%); z-index: 6; background: rgba(12,14,24,.94);
+               color: #eee; padding: 14px 18px; border-radius: 14px; font: 600 16px system-ui, sans-serif; width: min(92vw, 520px); }
+  #lensPanel label { display: block; margin: 6px 0; }
+  #lensPanel input[type=range] { width: 100%; height: 34px; }
+  #lensPanel .row { display: flex; gap: 8px; justify-content: space-between; margin-top: 6px; }
+  #lensPanel button { font: 600 15px system-ui, sans-serif; padding: 8px 12px; border-radius: 10px; border: 1px solid #556; background: #223; color: #dde; }
+  #err { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 9; display: flex; align-items: center; justify-content: center;
+         background: #300; color: #fff; font-size: 22px; padding: 24px; text-align: center; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<video id="vid" playsinline webkit-playsinline preload="auto"></video>
+<audio id="aud" preload="auto"></audio>
+<div id="divider" hidden></div>
+<div class="cross" id="crossL" hidden></div>
+<div class="cross" id="crossR" hidden></div>
+<div class="hud" id="hudL" hidden></div>
+<div class="hud" id="hudR" hidden></div>
+<div id="hint" class="faded"></div>
+<div id="buttons" hidden>
+  <button id="btnRecenter" type="button">Recenter</button>
+  <button id="btnMode" type="button">Mono</button>
+  <button id="btnLens" type="button">Lens</button>
+</div>
+<div id="lensPanel" hidden>
+  <label>Eye separation (lens offset): <span id="offVal"></span>
+    <input id="offRange" type="range" min="-0.15" max="0.25" step="0.005"></label>
+  <label>Field of view: <span id="fovVal"></span>
+    <input id="fovRange" type="range" min="50" max="110" step="1"></label>
+  <div class="row"><button id="lensReset" type="button">Reset</button><button id="lensClose" type="button">Done</button></div>
+  <div style="font-weight:400;font-size:14px;color:#aab;margin-top:6px">The two yellow crosses must merge into one.
+    With the headset on: controller d-pad left/right = separation, up/down = field of view, A / B / View closes this.</div>
+</div>
+<div id="start">
+  <h1>VR Browser</h1>
+  <p id="secureWarn" class="warn" hidden></p>
+  <p id="keyWarn" class="warn" hidden>This address has no access key. Open the full address the laptop printed (it ends in ?k=...).</p>
+  <button id="go" type="button">TAP TO START</button>
+  <p>Turn the phone sideways (landscape). After the tap, allow <b>Motion &amp; Orientation</b> if asked.</p>
+  <p>Point with your head (the ring). A = click, B = back, left stick = scroll, X = play the video in VR,
+     L3 (press the left stick) = keyboard, R3 = new window (hold = close it), LT / RT = switch windows.
+     In a video: A = the player-bar button you look at (else pause), Y = change projection / 3D, B = back. Start = re-centre.</p>
+</div>
+<div id="err" hidden></div>
+
+<script>
+"use strict";
+// ═══════════════════════════════════════════════════════════════════════════
+//  VR browser (phone side), v2. Browser windows float in dark space; the laptop runs
+//  headless Brave and streams the active window here as JPEG frames over /ws/vr.
+//  Videos are STREAMED to the phone (MSE, or a video + audio element pair) and shown
+//  on a cinema screen, a 360/180 sphere or the video's own projection mesh.
+//  Everything works with the controller in the headset: tab strip + address bar,
+//  3D keyboard, VR player bar. WebGL2, single file, no libraries.
+//  Spec: ../DESIGN_V2.md (sections A6, A7, B, C, D, G).
+// ═══════════════════════════════════════════════════════════════════════════
+const PARAMS = new URLSearchParams(location.search);
+const AUTOSTART = PARAMS.has("autostart");          // test hook: no tap, no sensors
+const DEMO = PARAMS.get("demo");                     // test hook: fake page / fake video (no server needed)
+const KEY = PARAMS.get("k") || "";
+const deg = Math.PI / 180;
+const IPD = parseFloat(PARAMS.get("ipd") || "0.063");
+const SHARP = PARAMS.get("sharp") !== "0";           // B1 test switch: ?sharp=0 = the v1 sampling
+const DPR_OVERRIDE = parseFloat(PARAMS.get("dpr") || "0") || 0;
+const SPAN_OVERRIDE = parseFloat(PARAMS.get("span") || "0") || 0;   // test: fixed cinema span (degrees), not saved
+
+// C1: projection ids. up = sphere sampling mode in the shader (0 = mesh UV / cinema), fam = image-test family
+const PROJ = {
+  flat:         {label: "Flat screen",          up: 0, fam: "flat",     st: "mono"},
+  flat_sbs:     {label: "3D side by side",      up: 0, fam: "flat",     st: "sbs"},
+  flat_tb:      {label: "3D top/bottom",        up: 0, fam: "flat",     st: "tb"},
+  equirect:     {label: "360",                  up: 1, fam: "equirect", st: "mono"},
+  equirect_tb:  {label: "360 3D top/bottom",    up: 1, fam: "equirect", st: "tb"},
+  equirect_sbs: {label: "360 3D side by side",  up: 1, fam: "equirect", st: "sbs"},
+  half_sbs:     {label: "180 3D (VR180)",       up: 2, fam: "half",     st: "sbs"},
+  half_mono:    {label: "180",                  up: 2, fam: "half",     st: "mono"},
+  half_tb:      {label: "180 3D top/bottom",    up: 2, fam: "half",     st: "tb"},
+  eac:          {label: "360 cube map",         up: 3, fam: "eac",      st: null},    // stereo from ready.stereo
+  mesh:         {label: "VR180 / 360 (EAC)",    up: 0, fam: "mesh",     st: null},
+};
+const Y_CYCLE = ["flat", "flat_sbs", "flat_tb", "equirect", "equirect_tb", "equirect_sbs", "half_sbs", "half_mono", "half_tb", "eac", "mesh"];
+const FAM_IDS = {flat: {mono: "flat", sbs: "flat_sbs", tb: "flat_tb"},
+                 equirect: {mono: "equirect", sbs: "equirect_sbs", tb: "equirect_tb"},
+                 half: {mono: "half_mono", sbs: "half_sbs", tb: "half_tb"}};
+const HOME_PANEL = {d: 2.2, w: 2.4, h: 1.35, k: 0, y: -0.12};   // browser panel: 2.4 m wide at 2.2 m, a bit low
+const CINEMA_R = 5;                                              // curved cinema screen radius (m)
+
+const canvas = document.getElementById("c");
+const video = document.getElementById("vid");
+const aud = document.getElementById("aud");
+const hudL = document.getElementById("hudL"), hudR = document.getElementById("hudR");
+const hintEl = document.getElementById("hint");
+const startEl = document.getElementById("start");
+const btnMode = document.getElementById("btnMode");
+const crossL = document.getElementById("crossL"), crossR = document.getElementById("crossR");
+const lensPanel = document.getElementById("lensPanel");
+const offRange = document.getElementById("offRange"), fovRange = document.getElementById("fovRange");
+const LOAD_T = performance.now();
+
+const state = {
+  stereo: (PARAMS.get("mode") || "stereo") !== "mono",
+  source: "none", sensorsInfo: "",
+  link: "connecting", fps: 0, frames: 0, gamepad: "",
+  bodyYaw: (parseFloat(PARAMS.get("yaw") || "0")) * deg,
+  yawOffset: 0,
+  H: null,                   // head rotation rows (camera -> world, GL Y-up), null = level
+  needRecenter: true,
+  // browser / video
+  mode: "browser",           // "browser" | "vr" (a video plays here) | "screen" (live page on the cinema screen)
+  info: {url: "", title: "", w: 1280, h: 720, loading: false, canBack: false, tab: null, focus: null},
+  tabs: {active: null, max: 6, list: []},
+  proj: "flat", projAuto: "flat", vstereo: "mono", meshLabel: null, hasMesh: false, force2D: false,
+  vw: 16, vh: 9, videoTitle: "", vinfo: null,
+  panelA: 1, videoA: 0, cinemaT: 0,   // animated: panel opacity, video opacity, panel->cinema morph
+  curYaw: 0, curPitch: 0,    // cursor nudge from the right stick (radians, camera space)
+  ptr: null,                 // {x, y} pointer on the page (0..1) or null when off the page
+  ptrTarget: null,           // "kbd" | "chrome" | "bar" | "page" | null
+  ptrHit: null,              // {p, t} where the ring is drawn
+  chromeHit: null,           // chrome item under the ring
+  frameSeen: false,
+  panelFrames: 0,
+};
+const fixedPitch = parseFloat(PARAMS.get("pitch") || "0") * deg;
+
+// -- Lens fit: same storage key as the phone_host test page (same origin => it carries over) --
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const LENS_DEFAULT = {offset: IS_ANDROID ? 0.08 : 0.0, fov: 80};
+const lens = Object.assign({}, LENS_DEFAULT);
+try { Object.assign(lens, JSON.parse(localStorage.getItem("pvr_lens") || "{}")); } catch (_) {}
+if (PARAMS.has("offset")) lens.offset = parseFloat(PARAMS.get("offset"));
+if (PARAMS.has("fov")) lens.fov = parseFloat(PARAMS.get("fov"));
+let crossTimer = null;
+function setLens(o, show = true) {
+  if (o.reset) Object.assign(lens, LENS_DEFAULT);
+  if (o.offset != null) lens.offset = o.offset;
+  if (o.doffset) lens.offset += o.doffset;
+  if (o.fov != null) lens.fov = o.fov;
+  if (o.dfov) lens.fov += o.dfov;
+  lens.offset = Math.round(Math.min(0.25, Math.max(-0.15, lens.offset)) * 1000) / 1000;
+  lens.fov = Math.min(110, Math.max(50, Math.round(lens.fov)));
+  try { localStorage.setItem("pvr_lens", JSON.stringify({offset: lens.offset, fov: lens.fov})); } catch (_) {}
+  syncLensUi(); layoutHud();
+  showCrosses(lensPanel.hidden ? 4000 : 0);
+  if (show) hint(`separation ${lens.offset.toFixed(3)}   fov ${lens.fov}`, 2500);
+  scheduleHello();
+}
+function showCrosses(ms) {
+  if (!state.stereo) return;
+  crossL.hidden = false; crossR.hidden = false;
+  clearTimeout(crossTimer);
+  if (ms) crossTimer = setTimeout(() => { if (lensPanel.hidden) { crossL.hidden = true; crossR.hidden = true; } }, ms);
+}
+function eyeCentres() { return [(0.5 + lens.offset) * 0.5, 0.5 + (0.5 - lens.offset) * 0.5]; }
+
+function showError(msg) { const e = document.getElementById("err"); e.textContent = msg; e.hidden = false; }
+window.addEventListener("error", (e) => console.error("Uncaught:", e.message));
+
+// ── WebGL2 setup ────────────────────────────────────────────────────────────
+const gl = canvas.getContext("webgl2", {antialias: true, alpha: false, powerPreference: "high-performance",
+                                        preserveDrawingBuffer: PARAMS.has("shot")});
+if (!gl) showError("WebGL2 is not available in this browser. Update Chrome / Safari.");
+let ANISO = null, ANISO_MAX = 1, MAX_TEX = 4096;
+if (gl) {
+  ANISO = gl.getExtension("EXT_texture_filter_anisotropic") || gl.getExtension("WEBKIT_EXT_texture_filter_anisotropic");
+  if (ANISO) ANISO_MAX = gl.getParameter(ANISO.MAX_TEXTURE_MAX_ANISOTROPY_EXT) || 1;
+  MAX_TEX = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
+  canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); });
+  canvas.addEventListener("webglcontextrestored", () => location.reload());
+}
+
+const VS = `#version 300 es
+precision highp float;
+in vec3 aPos; in vec2 aUV;
+uniform mat4 uVP, uModel;
+uniform int uGeo;            // 0 = mesh positions, 1 = screen surface built from aUV
+uniform vec4 uScr;           // screen: distance, width, height, curvature (0 flat .. 1 cylinder around the eye)
+uniform float uScrY, uPt;
+out vec2 vUV;
+out vec3 vDir;               // object-space position (sphere sampling direction)
+void main() {
+  vec3 p = aPos;
+  if (uGeo == 1) {
+    float d = uScr.x, k = max(uScr.w, 1e-4), R = d / k;
+    float th = (aUV.x - 0.5) * uScr.y / R;
+    float s = sin(0.5 * th);
+    p = vec3(R * sin(th), uScrY + (0.5 - aUV.y) * uScr.z, -(d - 2.0 * R * s * s));
+  }
+  vUV = aUV;
+  vDir = p;
+  gl_Position = uVP * uModel * vec4(p, 1.0);
+  gl_PointSize = aUV.x * uPt;
+}`;
+// B1 (sharp 4-tap minification), B5 (per-fragment sphere sampling). All derivatives are taken
+// before any branch on per-fragment data (uniform control flow).
+const FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+in vec3 vDir;
+out vec4 o;
+uniform int uMode;           // 0 texture, 1 colour, 2 cursor ring, 3 star point
+uniform int uSharp;          // 1 = 4-tap box at LOD bias -1 (flat screens, panels)
+uniform int uProj;           // 0 = (transformed) mesh UV, 1 = equirect 360, 2 = equirect 180, 3 = EAC
+uniform sampler2D uTex;
+uniform vec4 uUVT;           // uProj 0: s = u * x + y, t = v * z + w
+uniform vec4 uWin;           // uProj 1..3: eye window s0, t0, ds, dt (t = 0 at the top)
+uniform vec2 uTexel;         // 1 / texture size
+uniform vec3 uEac[6];        // EAC face table: tile column, tile row, rotation (faces: left front right bottom back top)
+uniform float uAlpha;
+uniform vec4 uColor;
+const float PI = 3.14159265;
+vec2 eacUV(vec3 d) {
+  vec3 a = abs(d);
+  int f; vec2 q;             // q: face-local, x right, y up, -1..1 (seen from inside)
+  if (a.x >= a.y && a.x >= a.z) {
+    if (d.x > 0.0) { f = 2; q = vec2(d.z, d.y) / a.x; } else { f = 0; q = vec2(-d.z, d.y) / a.x; }
+  } else if (a.y >= a.z) {
+    if (d.y > 0.0) { f = 5; q = vec2(d.x, d.z) / a.y; } else { f = 3; q = vec2(d.x, -d.z) / a.y; }
+  } else {
+    if (d.z < 0.0) { f = 1; q = vec2(d.x, d.y) / a.z; } else { f = 4; q = vec2(-d.x, d.y) / a.z; }
+  }
+  vec2 g = atan(q) * (2.0 / PI) + 0.5;               // equi-angular remap, 0..1, y up
+  vec3 e = uEac[f];
+  int r = int(e.z + 0.5);
+  if (r == 1) g = vec2(g.y, 1.0 - g.x);
+  else if (r == 2) g = vec2(1.0 - g.x, 1.0 - g.y);
+  else if (r == 3) g = vec2(1.0 - g.y, g.x);
+  return vec2((e.x + g.x) / 3.0, (e.y + 1.0 - g.y) / 2.0);
+}
+void main() {
+  vec2 uv = vec2(vUV.x * uUVT.x + uUVT.y, vUV.y * uUVT.z + uUVT.w);
+  vec2 dx = dFdx(uv) * 0.25, dy = dFdy(uv) * 0.25;
+  vec3 d = normalize(vDir + vec3(0.0, 0.0, -1e-6));
+  float lon = atan(d.x, -d.z);                       // 0 straight ahead (-Z), + to the right (+X)
+  float lat = acos(clamp(d.y, -1.0, 1.0));           // 0 up
+  vec2 su = uProj == 2 ? vec2(lon / PI + 0.5, lat / PI) : vec2(lon / (2.0 * PI) + 0.5, lat / PI);
+  vec2 g1x = dFdx(su), g1y = dFdy(su);
+  vec2 u2 = vec2(fract(su.x + 0.5), su.y);           // seam: use the derivative of the shifted u when smaller
+  vec2 g2x = dFdx(u2), g2y = dFdy(u2);
+  if (abs(g2x.x) + abs(g2y.x) < abs(g1x.x) + abs(g1y.x)) { g1x.x = g2x.x; g1y.x = g2y.x; }
+  float r = length(vUV - 0.5) * 2.0, fw = max(fwidth(r), 1e-3);
+  if (uMode == 0) {
+    vec4 c;
+    if (uProj == 0) {
+      if (uSharp == 1) {
+        c = (texture(uTex, uv + dx + dy, -1.0) + texture(uTex, uv + dx - dy, -1.0) +
+             texture(uTex, uv - dx + dy, -1.0) + texture(uTex, uv - dx - dy, -1.0)) * 0.25;
+      } else c = texture(uTex, uv);
+    } else if (uProj == 3) {
+      vec2 st = uWin.xy + eacUV(d) * uWin.zw;
+      c = textureLod(uTex, st, 0.0);
+    } else {
+      vec2 st = uWin.xy + su * uWin.zw;
+      st = clamp(st, uWin.xy + uTexel * 0.5, uWin.xy + uWin.zw - uTexel * 0.5);   // no bleed from the other eye
+      c = textureGrad(uTex, st, g1x * uWin.zw, g1y * uWin.zw);
+      if (uProj == 2 && (su.x < 0.0 || su.x > 1.0)) c = vec4(0.0, 0.0, 0.0, 1.0);
+    }
+    o = vec4(c.rgb, uAlpha);
+  } else if (uMode == 1) {
+    o = vec4(uColor.rgb, uColor.a * uAlpha);
+  } else if (uMode == 2) {
+    float ring = smoothstep(0.52 - fw, 0.52 + fw, r) * (1.0 - smoothstep(0.80 - fw, 0.80 + fw, r));
+    float edge = smoothstep(0.38 - fw, 0.38 + fw, r) * (1.0 - smoothstep(0.97 - fw, 0.97 + fw, r));
+    float a = max(ring, edge * 0.55);
+    o = vec4(uColor.rgb * (ring / max(a, 1e-3)), a * uAlpha);
+  } else {
+    float a = smoothstep(0.5, 0.1, length(gl_PointCoord - 0.5)) * vUV.y;
+    o = vec4(0.82, 0.88, 1.0, a * uAlpha);
+  }
+}`;
+
+function compile(type, src) {
+  const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+  return sh;
+}
+// EAC face table (B5): [column, row, rotation] for faces left, front, right, bottom, back, top.
+// YouTube layout: top row left | front | right; the bottom row is one band bottom -> back -> top turned
+// 90° clockwise (face "up" points right in the band). Rotation r: 0 none, 1 = 90° CW, 3 = 90° CCW,
+// where face (x, y up) -> tile r1: (y, 1-x), r3: (1-y, x). Final table, verified on
+// scratchpad/stereo/frame_ZvZ7da8JBUk.jpg (front/left/right/back/up/down views: straight, continuous edges):
+//   left [0,0,0]  front [1,0,0]  right [2,0,0]  bottom [0,1,3]  back [1,1,1]  top [2,1,3]
+const EAC_FACES = [[0, 0, 0], [1, 0, 0], [2, 0, 0], [0, 1, 3], [1, 1, 1], [2, 1, 3]];
+let prog, U = {}, A = {};
+if (gl) {
+  prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  for (const n of ["uVP", "uModel", "uGeo", "uScr", "uScrY", "uPt", "uMode", "uSharp", "uProj", "uTex", "uUVT", "uWin",
+                   "uTexel", "uEac", "uAlpha", "uColor"])
+    U[n] = gl.getUniformLocation(prog, n);
+  for (const n of ["aPos", "aUV"]) A[n] = gl.getAttribLocation(prog, n);
+  gl.uniform1i(U.uTex, 0);
+  gl.uniform3fv(U.uEac, new Float32Array([].concat(...EAC_FACES)));
+  gl.disable(gl.DEPTH_TEST);              // everything is drawn back to front
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+}
+
+// Mesh: interleaved pos(3) uv(2), own VAO, optional index buffer (16 or 32 bit)
+function makeMesh(verts, indices, prim) {
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, verts instanceof Float32Array ? verts : new Float32Array(verts), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(A.aPos); gl.vertexAttribPointer(A.aPos, 3, gl.FLOAT, false, 20, 0);
+  gl.enableVertexAttribArray(A.aUV); gl.vertexAttribPointer(A.aUV, 2, gl.FLOAT, false, 20, 12);
+  let count = verts.length / 5, ibuf = null, itype = gl.UNSIGNED_SHORT;
+  if (indices) {
+    let big = false;
+    for (let i = 0; i < indices.length; i++) if (indices[i] > 65535) { big = true; break; }
+    itype = big ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+    ibuf = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibuf);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, big ? new Uint32Array(indices) : new Uint16Array(indices), gl.STATIC_DRAW);
+    count = indices.length;
+  }
+  gl.bindVertexArray(null);
+  return {vao, buf, ibuf, count, indexed: !!indices, itype, prim: prim === undefined ? gl.TRIANGLES : prim};
+}
+function freeMesh(m) {
+  if (!m) return;
+  try { gl.deleteVertexArray(m.vao); gl.deleteBuffer(m.buf); if (m.ibuf) gl.deleteBuffer(m.ibuf); } catch (_) {}
+}
+function gridMesh(nu, nv) {              // (u, v) grid for the screen surface; v = 0 at the top
+  const v = [], idx = [];
+  for (let j = 0; j <= nv; j++) for (let i = 0; i <= nu; i++) v.push(0, 0, 0, i / nu, j / nv);
+  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) {
+    const a = j * (nu + 1) + i, b = a + 1, c = a + nu + 1, d = c + 1;
+    idx.push(a, c, b, b, c, d);
+  }
+  return makeMesh(v, idx);
+}
+function quadMesh() {                    // -1..1 square in XY facing +Z, v = 0 at the top
+  const v = [-1, -1, 0, 0, 1,  1, -1, 0, 1, 1,  1, 1, 0, 1, 0,  -1, 1, 0, 0, 0];
+  return makeMesh(v, [0, 1, 2, 0, 2, 3]);
+}
+function sphereMesh(nLon, nLat) {        // unit sphere seen from inside (geometry only: B5 samples per fragment)
+  const v = [], idx = [];
+  for (let j = 0; j <= nLat; j++) {
+    const lat = (0.5 - j / nLat) * Math.PI;
+    for (let i = 0; i <= nLon; i++) {
+      const lon = (i / nLon - 0.5) * 2 * Math.PI;
+      v.push(Math.cos(lat) * Math.sin(lon), Math.sin(lat), -Math.cos(lat) * Math.cos(lon), i / nLon, j / nLat);
+    }
+  }
+  for (let j = 0; j < nLat; j++) for (let i = 0; i < nLon; i++) {
+    const a = j * (nLon + 1) + i, b = a + 1, c = a + nLon + 1, d = c + 1;
+    idx.push(a, c, b, b, c, d);
+  }
+  return makeMesh(v, idx);
+}
+function starMesh(n) {                   // faint, steady star field (something still to look at)
+  let seed = 12345;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const v = [];
+  for (let i = 0; i < n; i++) {
+    const z = rnd() * 2 - 1, a = rnd() * 2 * Math.PI, r = Math.sqrt(1 - z * z);
+    const big = rnd() < 0.06;
+    v.push(r * Math.cos(a) * 100, z * 100, r * Math.sin(a) * 100,
+           big ? 2.6 + rnd() * 1.2 : 1.4 + rnd() * 1.0,        // size (px at dpr 1)
+           big ? 0.45 + rnd() * 0.25 : 0.12 + rnd() * 0.22);   // brightness
+  }
+  return makeMesh(v, null, gl.POINTS);
+}
+let GRID, QUAD, SPHERE, STARS;
+if (gl) { GRID = gridMesh(64, 16); QUAD = quadMesh(); SPHERE = sphereMesh(96, 48); STARS = starMesh(1600); }
+
+// ── Textures (B2: mipmaps only where they help) ─────────────────────────────
+function makeTex(mips = true) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mips ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  if (ANISO) gl.texParameterf(gl.TEXTURE_2D, ANISO.TEXTURE_MAX_ANISOTROPY_EXT, ANISO_MAX);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+  return {tex: t, w: 1, h: 1, mips};
+}
+function uploadTex(T, src, w, h, mips) {
+  if (!w || !h) return false;
+  if (mips === undefined) mips = T.mips;
+  gl.bindTexture(gl.TEXTURE_2D, T.tex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  try {
+    if (T.w !== w || T.h !== h) { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); T.w = w; T.h = h; }
+    else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, src);
+  } catch (e) { console.warn("texture upload:", e.message); return false; }
+  if (mips) gl.generateMipmap(gl.TEXTURE_2D);
+  return true;
+}
+function setTexMips(T, on) {             // switch the min filter (and build the mips now so the texture stays complete)
+  if (T.mips === on) return;
+  T.mips = on;
+  gl.bindTexture(gl.TEXTURE_2D, T.tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, on ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+  if (on) gl.generateMipmap(gl.TEXTURE_2D);
+}
+let panelTex, videoTex, hudTex;
+if (gl) { panelTex = makeTex(); videoTex = makeTex(); hudTex = makeTex(); }
+
+// Placeholder page shown on the panel until the first browser frame arrives (and for new windows)
+const phCanvas = document.createElement("canvas"); phCanvas.width = 1280; phCanvas.height = 720;
+let phText = "";
+function drawPlaceholder(line1, line2) {
+  const key = line1 + "|" + (line2 || "");
+  if (key === phText || !gl) return;
+  phText = key;
+  const g = phCanvas.getContext("2d");
+  const grd = g.createLinearGradient(0, 0, 0, 720);
+  grd.addColorStop(0, "#151a26"); grd.addColorStop(1, "#0b0e16");
+  g.fillStyle = grd; g.fillRect(0, 0, 1280, 720);
+  g.strokeStyle = "#2a3346"; g.lineWidth = 4; g.strokeRect(2, 2, 1276, 716);
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillStyle = "#e8edf6"; g.font = "600 64px system-ui, Segoe UI, Roboto, sans-serif";
+  g.fillText(line1, 640, 320);
+  if (line2) { g.fillStyle = "#93a0b5"; g.font = "36px system-ui, Segoe UI, Roboto, sans-serif"; g.fillText(line2, 640, 410); }
+  uploadTex(panelTex, phCanvas, 1280, 720);
+}
+
+// Canvas helpers for the 3D UI (HUD card, tab strip, player bar, keyboard)
+const FONT = "system-ui, Segoe UI, Roboto, sans-serif";
+function fitText(g, s, maxW) {
+  s = String(s || "");
+  if (g.measureText(s).width <= maxW) return s;
+  while (s.length > 1 && g.measureText(s + "…").width > maxW) s = s.slice(0, -1);
+  return s + "…";
+}
+function rr(g, x, y, w, h, r) {          // rounded rectangle path (no ctx.roundRect on old Safari)
+  r = Math.min(r, w / 2, h / 2);
+  g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+function uiCanvas(w, h) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  return {c, g: c.getContext("2d"), w, h, T: gl ? makeTex(true) : null, key: ""};
+}
+
+// 3D HUD card (title, status line, progress bar)
+const hudCanvas = document.createElement("canvas"); hudCanvas.width = 1024; hudCanvas.height = 256;
+const hud3 = {title: "", text: "", pct: null, until: 0, a: 0, yaw: 0, key: ""};
+function hudShow(o, ms) {
+  hud3.title = o.title != null ? o.title : hud3.title;
+  hud3.text = o.text != null ? o.text : "";
+  hud3.pct = o.pct != null ? o.pct : null;
+  hud3.until = ms === Infinity ? Infinity : performance.now() + (ms || 3000);
+  // sphere / mesh video: show it where you are looking; otherwise in front of the panel / screen
+  hud3.yaw = (state.mode === "vr" && !isCinema(state.proj)) ? headYawOf(currentRotation()) : 0;
+  redrawHud();
+}
+function hudHide() { hud3.until = 0; }
+function redrawHud() {
+  const key = hud3.title + "|" + hud3.text + "|" + (hud3.pct == null ? "" : Math.round(hud3.pct));
+  if (key === hud3.key || !gl) return;
+  hud3.key = key;
+  const g = hudCanvas.getContext("2d"), W = 1024, Hh = 256;
+  g.fillStyle = "#05070d"; g.fillRect(0, 0, W, Hh);
+  g.fillStyle = "rgba(14,17,26,1)";
+  rr(g, 0, 0, W, Hh, 36); g.fill();
+  g.strokeStyle = "#33405a"; g.lineWidth = 4; g.stroke();
+  g.textAlign = "center"; g.textBaseline = "middle";
+  const hasBar = hud3.pct != null;
+  g.fillStyle = "#f2f5fa"; g.font = "700 52px " + FONT;
+  g.fillText(fitText(g, hud3.title || "", W - 70), W / 2, hud3.text || hasBar ? 66 : Hh / 2);
+  if (hud3.text) {
+    g.fillStyle = "#a8b3c5"; g.font = "38px " + FONT;
+    g.fillText(fitText(g, hud3.text, W - 70), W / 2, hasBar ? 132 : 150);
+  }
+  if (hasBar) {
+    const x = 70, y = 180, bw = W - 140, bh = 26, p = Math.max(0, Math.min(100, hud3.pct)) / 100;
+    g.fillStyle = "#26304a"; g.fillRect(x, y, bw, bh);
+    g.fillStyle = "#2f81f7"; g.fillRect(x, y, bw * p, bh);
+  }
+  uploadTex(hudTex, hudCanvas, W, Hh);
+}
+
+// ── Maths: 3x3 as row arrays, 4x4 column-major Float32Array ─────────────────
+const rotY = (a) => [[Math.cos(a), 0, Math.sin(a)], [0, 1, 0], [-Math.sin(a), 0, Math.cos(a)]];
+const rotX = (a) => [[1, 0, 0], [0, Math.cos(a), -Math.sin(a)], [0, Math.sin(a), Math.cos(a)]];
+function mul3(A, B) { return A.map(row => [0, 1, 2].map(j => row[0] * B[0][j] + row[1] * B[1][j] + row[2] * B[2][j])); }
+const mv3 = (M, v) => [M[0][0] * v[0] + M[0][1] * v[1] + M[0][2] * v[2], M[1][0] * v[0] + M[1][1] * v[1] + M[1][2] * v[2],
+                       M[2][0] * v[0] + M[2][1] * v[1] + M[2][2] * v[2]];
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+function qToRows(q) {
+  const [x, y, z, w] = q;
+  return [[1 - 2*(y*y + z*z), 2*(x*y - z*w),     2*(x*z + y*w)],
+          [2*(x*y + z*w),     1 - 2*(x*x + z*z), 2*(y*z - x*w)],
+          [2*(x*z - y*w),     2*(y*z + x*w),     1 - 2*(x*x + y*y)]];
+}
+function qMul(a, b) {
+  return [a[3]*b[0] + a[0]*b[3] + a[1]*b[2] - a[2]*b[1],
+          a[3]*b[1] - a[0]*b[2] + a[1]*b[3] + a[2]*b[0],
+          a[3]*b[2] + a[0]*b[1] - a[1]*b[0] + a[2]*b[3],
+          a[3]*b[3] - a[0]*b[0] - a[1]*b[1] - a[2]*b[2]];
+}
+const enuToGl = (M) => [M[0], M[2], M[1].map(v => -v)];
+function perspective(fovy, aspect, near, far) {
+  const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+  return new Float32Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) * nf, -1, 0, 0, 2 * far * near * nf, 0]);
+}
+function viewMatrix(R, e) {
+  const m = new Float32Array(16);
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) m[j * 4 + i] = R[j][i];
+    m[12 + i] = -(R[0][i] * e[0] + R[1][i] * e[1] + R[2][i] * e[2]);
+  }
+  m[15] = 1;
+  return m;
+}
+function mul4(a, b) {
+  const o = new Float32Array(16);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+    let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
+    o[c * 4 + r] = s;
+  }
+  return o;
+}
+// Model matrix from rotation rows M (object -> world), per-axis scale s, position p
+function modelRS(M, s, p) {
+  return new Float32Array([M[0][0] * s[0], M[1][0] * s[0], M[2][0] * s[0], 0,
+                           M[0][1] * s[1], M[1][1] * s[1], M[2][1] * s[1], 0,
+                           M[0][2] * s[2], M[1][2] * s[2], M[2][2] * s[2], 0, p[0], p[1], p[2], 1]);
+}
+const IDENT = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+const I3 = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+const headYawOf = (H) => Math.atan2(H[0][2], H[2][2]);
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const ease = (t) => t * t * (3 - 2 * t);
+
+// ── Projection helpers (C1) ─────────────────────────────────────────────────
+const isCinema = (p) => !!PROJ[p] && PROJ[p].fam === "flat";
+function projStereo(p) { const s = PROJ[p] && PROJ[p].st; return s || state.vstereo || "mono"; }
+function projLabel(p) {
+  if (p === "mesh") return state.meshLabel || PROJ.mesh.label;
+  return PROJ[p] ? PROJ[p].label : String(p);
+}
+function eyeWindow(p, eye) {             // [s0, t0, ds, dt], t = 0 at the top
+  const st = projStereo(p), e = state.force2D ? 0 : eye;
+  if (st === "sbs") return e ? [0.5, 0, 0.5, 1] : [0, 0, 0.5, 1];
+  if (st === "tb") return e ? [0, 0.5, 1, 0.5] : [0, 0, 1, 0.5];
+  return [0, 0, 1, 1];
+}
+function screenAspect(p) {               // aspect of ONE eye's picture on the cinema screen
+  const w = state.vw || 16, h = state.vh || 9, st = projStereo(p);
+  if (st === "sbs") { const a = (w / 2) / h; return a < 1.2 ? 2 * a : a; }
+  if (st === "tb") { const a = w / (h / 2); return a > 2.6 ? a / 2 : a; }
+  return w / h;
+}
+
+// ── Screen surfaces ─────────────────────────────────────────────────────────
+// B4: default cinema span from the lens (90 % of the eye's horizontal field), unless the user set one
+let userSpan = null;
+try { const s = parseFloat(localStorage.getItem("vrb_span")); if (s >= 45 && s <= 170) userSpan = s; } catch (_) {}
+let spanSaveTimer = null;
+function currentFovy() { return state.stereo ? lens.fov * deg : parseFloat(PARAMS.get("fov") || "70") * deg; }
+function defaultSpan() {
+  const eyeW = state.stereo ? canvas.width / 2 : canvas.width;
+  const asp = eyeW / Math.max(1, canvas.height);
+  return clamp(2 * Math.atan(Math.tan(currentFovy() / 2) * asp) * 0.9, 60 * deg, 100 * deg);
+}
+function cinemaSpan() {
+  if (SPAN_OVERRIDE) return SPAN_OVERRIDE * deg;
+  return userSpan != null ? userSpan * deg : defaultSpan();
+}
+function setUserSpan(d) {
+  userSpan = clamp(d, 45, 170);
+  clearTimeout(spanSaveTimer);
+  spanSaveTimer = setTimeout(() => { try { localStorage.setItem("vrb_span", String(Math.round(userSpan * 10) / 10)); } catch (_) {} }, 400);
+}
+function cinemaParams(aspect) {
+  const R = CINEMA_R, hMax = 2 * R * Math.tan(36 * deg);
+  let w = R * cinemaSpan(), h = w / aspect;
+  if (h > hMax) { h = hMax; w = h * aspect; }              // tall / portrait videos: limit the height
+  return {d: R, w, h, k: 1, y: -0.2};
+}
+function panelParams() {
+  const asp = (state.info.w || 16) / (state.info.h || 9);
+  const t = ease(state.cinemaT);
+  const P = {d: HOME_PANEL.d, w: HOME_PANEL.w, h: HOME_PANEL.w / asp, k: HOME_PANEL.k, y: HOME_PANEL.y};
+  if (t <= 0) return P;
+  const C = cinemaParams(asp);
+  return {d: lerp(P.d, C.d, t), w: lerp(P.w, C.w, t), h: lerp(P.h, C.h, t), k: lerp(P.k, C.k, t), y: lerp(P.y, C.y, t)};
+}
+// Ray (origin o, direction r) against a screen surface -> {u, v, t} (u, v in 0..1 when on it) or null
+function hitScreen(P, o, r) {
+  let x, y, z, t;
+  if (P.k < 0.002) {                                          // flat: plane z = -d
+    if (r[2] > -1e-4) return null;
+    t = (-P.d - o[2]) / r[2];
+    x = o[0] + r[0] * t; y = o[1] + r[1] * t;
+    return {u: x / P.w + 0.5, v: 0.5 - (y - P.y) / P.h, t};
+  }
+  const R = P.d / P.k, zc = R - P.d;                         // cylinder axis at (0, *, zc), radius R
+  const ox = o[0], oz = o[2] - zc;
+  const a = r[0] * r[0] + r[2] * r[2]; if (a < 1e-8) return null;
+  const b = 2 * (ox * r[0] + oz * r[2]), c = ox * ox + oz * oz - R * R;
+  const disc = b * b - 4 * a * c; if (disc < 0) return null;
+  t = (-b + Math.sqrt(disc)) / (2 * a); if (t <= 0) return null;
+  x = o[0] + r[0] * t; y = o[1] + r[1] * t; z = o[2] + r[2] * t;
+  const th = Math.atan2(x, -(z - zc));
+  return {u: th * R / P.w + 0.5, v: 0.5 - (y - P.y) / P.h, t};
+}
+// Flat UI quads (tab strip, player bar, keyboard): rotation rows M, centre c, size w x h (metres)
+function quadAt(yaw, pitch, dist, w, h) {
+  const M = mul3(rotY(yaw), rotX(pitch));
+  return {M, c: mv3(M, [0, 0, -dist]), w, h};
+}
+function quadModel(Q) { return modelRS(Q.M, [Q.w / 2, Q.h / 2, 1], Q.c); }
+function hitQuad(Q, o, r) {
+  const n = [Q.M[0][2], Q.M[1][2], Q.M[2][2]];
+  const den = dot3(r, n); if (Math.abs(den) < 1e-6) return null;
+  const t = dot3([Q.c[0] - o[0], Q.c[1] - o[1], Q.c[2] - o[2]], n) / den; if (t <= 0) return null;
+  const p = [o[0] + r[0] * t, o[1] + r[1] * t, o[2] + r[2] * t];
+  const dp = [p[0] - Q.c[0], p[1] - Q.c[1], p[2] - Q.c[2]];
+  const u = dot3(dp, [Q.M[0][0], Q.M[1][0], Q.M[2][0]]) / Q.w + 0.5;
+  const v = 0.5 - dot3(dp, [Q.M[0][1], Q.M[1][1], Q.M[2][1]]) / Q.h;
+  if (u < 0 || u > 1 || v < 0 || v > 1) return null;
+  return {u, v, t, p};
+}
+
+// ── Head tracking (phone_host + hmd_web hardening) ──────────────────────────
+function screenAngle() {
+  const a = (screen.orientation && typeof screen.orientation.angle === "number") ? screen.orientation.angle : window.orientation;
+  return (a || 0);
+}
+function eulerToScreenQuat(alpha, beta, gamma) {
+  const x = (beta || 0) * deg / 2, y = (gamma || 0) * deg / 2, z = (alpha || 0) * deg / 2;
+  const cX = Math.cos(x), cY = Math.cos(y), cZ = Math.cos(z), sX = Math.sin(x), sY = Math.sin(y), sZ = Math.sin(z);
+  const q = [sX*cY*cZ - cX*sY*sZ, cX*sY*cZ + sX*cY*sZ, cX*cY*sZ + sX*sY*cZ, cX*cY*cZ - sX*sY*sZ];
+  const a = -screenAngle() * deg / 2;
+  return qMul(q, [0, 0, Math.sin(a), Math.cos(a)]);
+}
+let lastOrientEvent = 0, orientEvents = 0, sensorHz = 0;
+// A phone with NO gyro (Galaxy A08) still fires deviceorientation with a constant alpha: only trust it
+// on iOS, when alpha moves, or when devicemotion has a rotationRate.
+let alphaFirst = null, alphaMoved = false, rotRateSeen = false;
+const GYRO = "gyro (deviceorientation)", WAITING = "waiting for sensors";
+function onOrientation(e) {
+  if (e.alpha == null || e.beta == null) return;
+  lastOrientEvent = performance.now();
+  if (alphaFirst === null) alphaFirst = e.alpha;
+  else if (Math.abs(e.alpha - alphaFirst) > 1e-3) alphaMoved = true;
+  // iOS always has a gyro: if tilt was chosen too early (slow permission answer), switch now
+  if (IS_IOS && state.source !== GYRO && state.source !== WAITING && state.source !== "none") {
+    state.source = GYRO; state.needRecenter = true;
+  }
+  if (state.source !== GYRO) return;
+  orientEvents++;
+  setHead(enuToGl(qToRows(eulerToScreenQuat(e.alpha, e.beta, e.gamma))));
+}
+function onMotionProbe(e) {
+  const r = e.rotationRate;
+  if (r && r.alpha != null && r.beta != null) { rotRateSeen = true; removeEventListener("devicemotion", onMotionProbe); }
+}
+const looksLikeGyro = () => lastOrientEvent > 0 && (IS_IOS || alphaMoved || rotRateSeen);
+function setHead(H) {
+  state.H = H;
+  if (state.needRecenter) { recenter(true); state.needRecenter = false; }
+}
+function recenter(quiet) {
+  state.yawOffset = state.H ? -headYawOf(state.H) : 0;
+  state.bodyYaw = 0;
+  state.curYaw = 0; state.curPitch = 0;
+  if (!quiet) { hint("Recentered", 1200); if (state.mode === "vr" && !isCinema(state.proj)) { bar.yaw = 0; kb.yaw = kb.inVr ? 0 : kb.yaw; } }
+}
+
+const TILT_SMOOTH = 0.25;
+const FLIP_PARAM = PARAMS.get("flip");
+let flipXY = false, upsideDownN = 0, grav = null;
+function gravityReading(x, y, z) {
+  if (state.source === GYRO) return;
+  if (flipXY) { x = -x; y = -y; }
+  if (FLIP_PARAM === null) {
+    const n = Math.hypot(x, y, z);
+    upsideDownN = (n > 5 && y / n < -0.6) ? upsideDownN + 1 : 0;
+    if (upsideDownN > 30) { flipXY = !flipXY; upsideDownN = 0; grav = null; return; }   // heads are never upside down
+  }
+  orientEvents++;
+  if (!grav) grav = [x, y, z];
+  else { grav[0] += TILT_SMOOTH * (x - grav[0]); grav[1] += TILT_SMOOTH * (y - grav[1]); grav[2] += TILT_SMOOTH * (z - grav[2]); }
+  const n = Math.hypot(grav[0], grav[1], grav[2]); if (n < 1) return;
+  const u = grav.map(v => v / n), fu = -u[2];
+  let h = [-fu * u[0], -fu * u[1], -1 - fu * u[2]];
+  if (Math.hypot(...h) < 0.15) { const s = fu > 0 ? -1 : 1, yu = u[1]; h = [s * -yu * u[0], s * (1 - yu * u[1]), s * -yu * u[2]]; }
+  const hn = Math.hypot(...h), Y = h.map(v => v / hn), Z = u;
+  const X = [Y[1]*Z[2] - Y[2]*Z[1], Y[2]*Z[0] - Y[0]*Z[2], Y[0]*Z[1] - Y[1]*Z[0]];
+  state.H = enuToGl([X, Y, Z]);
+}
+function startTilt() {
+  if ("Accelerometer" in window && PARAMS.get("sensor") !== "motion") {
+    try {
+      const s = new Accelerometer({frequency: 60, referenceFrame: "screen"});
+      let got = false;
+      flipXY = FLIP_PARAM !== null ? FLIP_PARAM === "1" : true;   // the A08 fit proven earlier
+      s.onreading = () => { got = true; gravityReading(s.x, s.y, s.z); };
+      s.onerror = () => { if (!got) startDeviceMotion(); };
+      s.start();
+      state.source = "tilt (Accelerometer)";
+      setTimeout(() => { if (!got && state.source === "tilt (Accelerometer)") startDeviceMotion(); }, 1200);
+      return;
+    } catch (e) { console.warn("Accelerometer failed:", e.message); }
+  }
+  startDeviceMotion();
+}
+let motionStarted = false;
+function startDeviceMotion() {
+  if (motionStarted) return; motionStarted = true;
+  flipXY = FLIP_PARAM === "1";
+  const iosSign = IS_IOS ? -1 : 1;           // iOS reports gravity with the opposite sign
+  if (state.source !== GYRO) state.source = "tilt (devicemotion)";
+  let got = false;
+  addEventListener("devicemotion", (e) => {
+    const g = e.accelerationIncludingGravity;
+    if (!g || g.x == null) return;
+    got = true;
+    const a = screenAngle() * deg, c = Math.cos(a), s = Math.sin(a);
+    const dx = g.x * iosSign, dy = g.y * iosSign, dz = g.z * iosSign;
+    gravityReading(dx * c - dy * s, dx * s + dy * c, dz);
+  });
+  setTimeout(() => { if (!got && state.source === "tilt (devicemotion)") state.source = "none (no motion sensors)"; }, 1500);
+}
+function startSensors() {
+  addEventListener("deviceorientation", onOrientation);
+  addEventListener("devicemotion", onMotionProbe);
+  const want = PARAMS.get("sensor");              // ?sensor=tilt|motion|gyro to force
+  if (want === "tilt" || want === "motion") { startTilt(); return; }
+  if (want === "gyro") { state.source = GYRO; state.needRecenter = true; return; }
+  state.source = WAITING;
+  setTimeout(() => {
+    if (looksLikeGyro()) state.source = GYRO;
+    else { if (lastOrientEvent > 0) state.sensorsInfo = "orientation events without a gyro"; startTilt(); }
+    state.needRecenter = true;
+    if (state.H) { recenter(true); state.needRecenter = false; }
+  }, 1200);
+}
+
+// ── Network: /ws/vr (frames, info, tabs, kbd, pad, video) ───────────────────
+let ws = null, wsFails = 0, wsLastMsg = 0, wsRefused = false;
+window.__vrbSent = [];                            // test hook: the last 200 messages this page sent
+function send(obj) {
+  const L = window.__vrbSent; L.push(obj); if (L.length > 200) L.shift();
+  if (DEMO) { demoServer(obj); return; }
+  if (ws && ws.readyState === 1) { try { ws.send(JSON.stringify(obj)); } catch (_) {} }
+}
+function withKey(url) {
+  if (!url) return "";
+  if (!KEY || /[?&]k=/.test(url)) return url;
+  return url + (url.includes("?") ? "&" : "?") + "k=" + encodeURIComponent(KEY);
+}
+function connectWs() {
+  if (DEMO || !location.host) { state.link = DEMO ? "demo (no server)" : "no server"; return; }
+  let sock;
+  try { sock = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/vr?k=${encodeURIComponent(KEY)}`); }
+  catch (e) { wsFails++; setTimeout(connectWs, 3000); return; }
+  ws = sock;
+  sock.binaryType = "blob";
+  let opened = false;
+  sock.onopen = () => {
+    opened = true; wsFails = 0; wsRefused = false; wsLastMsg = performance.now(); state.link = "connected";
+    sendHello();
+    if (caps) send(Object.assign({t: "caps"}, caps));          // G6: resend after every reconnect
+    if (!state.frameSeen) drawPlaceholder("Connected", "Waiting for the browser picture…");
+  };
+  sock.onmessage = (ev) => {
+    wsLastMsg = performance.now();
+    if (typeof ev.data === "string") { let m; try { m = JSON.parse(ev.data); } catch (_) { return; } onMessage(m); }
+    else onFrame(ev.data);
+  };
+  sock.onerror = () => {};
+  sock.onclose = () => {
+    if (ws === sock) ws = null;
+    laptopPad = null; laptopPadNone = false;
+    wsFails++;
+    if (!opened && wsFails >= 2) wsRefused = true;
+    state.link = wsRefused ? "cannot connect" : "reconnecting";
+    if (!state.frameSeen || state.mode === "browser")
+      drawPlaceholder(wsRefused ? "Cannot reach the laptop" : "Reconnecting…",
+                      wsRefused ? "Is server.py running? Open the full address it printed (with ?k=)." : "");
+    phText = "";
+    if (state.mode === "screen") setMode("browser");
+    setTimeout(connectWs, Math.min(8000, 1000 * wsFails));
+  };
+}
+// Half-open socket (Wi-Fi lost): the server sends a pad heartbeat every 0.5 s, so silence = dead
+setInterval(() => {
+  if (ws && ws.readyState === 1 && performance.now() - wsLastMsg > 5000) { try { ws.close(); } catch (_) {} }
+}, 1000);
+
+// B3/B7: real canvas numbers for the server log
+let helloTimer = null, curDpr = 1;
+function sendHello() {
+  const ew = state.stereo ? Math.floor(canvas.width / 2) : canvas.width, eh = canvas.height;
+  const fov = currentFovy() / deg;
+  const ppd = (eh / 2) / Math.tan(fov * deg / 2) * deg;
+  send({t: "hello", v: 2, w: canvas.width, h: canvas.height, dpr: Math.round(curDpr * 100) / 100, eye: [ew, eh],
+        stereo: state.stereo, fov: Math.round(fov * 10) / 10, ppd: Math.round(ppd * 100) / 100,
+        ua: String(navigator.userAgent || "").slice(0, 200)});
+}
+function scheduleHello() { clearTimeout(helloTimer); helloTimer = setTimeout(sendHello, 300); }
+function eyePpd() {
+  const eh = canvas.height;
+  return (eh / 2) / Math.tan(currentFovy() / 2) * deg;
+}
+
+// Screencast frames: decode off the main thread; keep only the newest pending frame
+let decoding = false, pendingBlob = null;
+function activeUrl() {
+  if (state.info.tab != null && state.info.tab === state.tabs.active) return state.info.url || "";
+  const t = state.tabs.list.find((x) => x.id === state.tabs.active);
+  return (t && t.url) || state.info.url || "";
+}
+const activeIsBlank = () => activeUrl() === "about:blank";
+function onFrame(data) {
+  if (activeIsBlank()) { showBlankPlaceholder(); return; }   // D5: a new window shows the placeholder
+  if (decoding) { pendingBlob = data; return; }
+  decodeFrame(data);
+}
+function showBlankPlaceholder() { drawPlaceholder("New window", "Type an address or search (L3 = keyboard)"); state.frameSeen = true; }
+function decodeFrame(data) {
+  decoding = true;
+  const blob = data instanceof Blob ? data : new Blob([data], {type: "image/jpeg"});
+  const done = () => {
+    decoding = false;
+    if (pendingBlob) { const b = pendingBlob; pendingBlob = null; decodeFrame(b); }
+  };
+  const put = (src, w, h) => {
+    if (activeIsBlank()) return;
+    if (uploadTex(panelTex, src, w, h)) { state.frameSeen = true; state.panelFrames++; phText = ""; }
+  };
+  if (window.createImageBitmap) {
+    createImageBitmap(blob).then((bmp) => {
+      put(bmp, bmp.width, bmp.height);
+      if (bmp.close) bmp.close();
+    }).catch((e) => console.warn("frame decode:", e && e.message)).then(done);
+  } else {                                       // very old browsers: <img> + object URL
+    const url = URL.createObjectURL(blob), img = new Image();
+    img.onload = () => { put(img, img.naturalWidth, img.naturalHeight); URL.revokeObjectURL(url); done(); };
+    img.onerror = () => { URL.revokeObjectURL(url); done(); };
+    img.src = url;
+  }
+}
+
+let laptopPad = null, laptopPadAt = 0, laptopPadNone = false, laptopNoneAt = 0, padLatch = 0;
+function parsePad(s) {
+  if (!s || s === "pad,none") return null;
+  const p = s.split(",");
+  if (p.length < 8) return null;
+  const f = (i) => parseFloat(p[i]) || 0;
+  return {bits: parseInt(p[1], 10) || 0, lx: f(2), ly: f(3), rx: f(4), ry: f(5), lt: f(6), rt: f(7)};
+}
+let pendingNewTab = 0;                           // time we asked for a new window (keeps its keyboard open)
+function onMessage(m) {
+  switch (m.t) {
+    case "info": {
+      Object.assign(state.info, {url: m.url || "", title: m.title || "", w: m.w || 1280, h: m.h || 720,
+                                 loading: !!m.loading, canBack: !!m.canBack,
+                                 tab: m.tab != null ? String(m.tab) : null,
+                                 focus: m.focus && typeof m.focus === "object" ? m.focus : null});
+      if (activeIsBlank() && state.mode === "browser") showBlankPlaceholder();
+      break;
+    }
+    case "tabs": {
+      const prev = state.tabs.active;
+      state.tabs = {active: m.active != null ? String(m.active) : null, max: m.max || 6,
+                    list: Array.isArray(m.list) ? m.list.map((t) => ({id: String(t.id), title: String(t.title || ""),
+                                                                      url: String(t.url || ""), loading: !!t.loading})) : []};
+      if (prev != null && state.tabs.active !== prev) {
+        const ours = pendingNewTab && performance.now() - pendingNewTab < 5000;
+        pendingNewTab = 0;
+        if (kb.open && !ours) kbClose();               // D4: tab switch closes the keyboard (not the new window's own)
+        phText = "";
+        if (activeIsBlank()) showBlankPlaceholder();
+      }
+      break;
+    }
+    case "kbd": onKbdMsg(m); break;
+    case "pad":
+      laptopPad = parsePad(m.s); laptopPadAt = performance.now();
+      // latch presses: a quick tap that is pressed and released between two (slow) frames still counts
+      if (laptopPad) padLatch |= laptopPad.bits & ~prevBits;
+      laptopPadNone = m.s === "pad,none"; if (laptopPadNone) laptopNoneAt = laptopPadAt;
+      break;
+    case "toast":
+      hudShow({title: m.text || "", text: ""}, 4500);
+      break;
+    case "video": onVideoMsg(m); break;
+  }
+}
+
+// ── Phone capability probe (G6) ─────────────────────────────────────────────
+let caps = null;
+const MSC = window.ManagedMediaSource || window.MediaSource || null;
+// test hook: ?capset=iphone|a08|old_iphone replaces the probe result with a fixed phone-like set
+const CAPSETS = {
+  iphone: {mse: "mms", mtex: 16384, v: {avc1: {mse: [2160, 2160, 2160, 2160], file: [2160, 2160, 2160, 2160]},
+           vp9: {mse: [1080, 1080, 0, 0], file: [0, 0, 0, 0]}}, a: {aac: true, opus: true}},
+  a08: {mse: "mse", mtex: 8192, v: {avc1: {mse: [1080, 1080, 1080, 1080], file: [1080, 1080, 1080, 1080]},
+        vp9: {mse: [2160, 1080, 1080, 1080], file: [2160, 1080, 1080, 1080]}, av1: {mse: [720, 480, 0, 0], file: [720, 480, 0, 0]}},
+        a: {aac: true, opus: true}},
+  low: {mse: "mse", mtex: 4096, v: {avc1: {mse: [480, 480, 480, 480], file: [480, 480, 480, 480]}}, a: {aac: true, opus: false}},
+  old_iphone: {mse: "none", mtex: 8192, v: {avc1: {mse: [0, 0, 0, 0], file: [1080, 1080, 1080, 1080]}}, a: {aac: true, opus: false}},
+};
+// Widest video frame this phone should upload as a texture every frame (memory + GPU time): 4096 on phones
+// and tablets (an 8K RGBA frame is ~118 MB and can get an iPhone tab killed), 8192 on desktops.
+function videoTexBudget() {
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+                 (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+  return Math.min(MAX_TEX, mobile ? 4096 : 8192);
+}
+async function probeCaps() {
+  const forced = CAPSETS[PARAMS.get("capset") || ""];
+  if (forced) return Object.assign({vtex: Math.min(forced.mtex, 4096)}, JSON.parse(JSON.stringify(forced)));
+  const H =[720, 1080, 1440, 2160, 2880, 4320], BR = {720: 2.5e6, 1080: 5e6, 1440: 10e6, 2160: 20e6, 2880: 30e6, 4320: 50e6};
+  const ctype = (fam, h) => {
+    if (fam === "avc1") return `video/mp4; codecs="${h <= 1080 ? "avc1.640028" : "avc1.640033"}"`;
+    if (fam === "vp9") return 'video/webm; codecs="vp09.00.51.08"';
+    if (fam === "vp9mp4") return 'video/mp4; codecs="vp09.00.51.08"';
+    return `video/mp4; codecs="${h <= 1080 ? "av01.0.08M.08" : h <= 2160 ? "av01.0.12M.08" : "av01.0.16M.08"}"`;
+  };
+  const mse = window.ManagedMediaSource ? "mms"
+            : (window.MediaSource && MediaSource.isTypeSupported('video/mp4; codecs="avc1.640028"')) ? "mse" : "none";
+  const MC = navigator.mediaCapabilities && navigator.mediaCapabilities.decodingInfo ? navigator.mediaCapabilities : null;
+  const query = (type, fam, h, fps) => MC.decodingInfo({type, video: {contentType: ctype(fam, h), width: Math.round(h * 16 / 9),
+                                                                      height: h, bitrate: BR[h], framerate: fps}});
+  const typeSupported = (type, ct) => {
+    try {
+      if (type === "media-source") return !!(MSC && MSC.isTypeSupported(ct));
+      return video.canPlayType(ct) === "probably";
+    } catch (_) { return false; }
+  };
+  const v = {};
+  for (const fam of ["avc1", "vp9", "vp9mp4", "av1"]) v[fam] = {mse: [0, 0, 0, 0], file: [0, 0, 0, 0]};
+  for (const [type, key] of [["media-source", "mse"], ["file", "file"]]) {
+    if (key === "mse" && mse === "none") continue;
+    let usable = !!MC;
+    if (usable) { try { await query(type, "avc1", 1080, 30); } catch (_) { usable = false; } }
+    if (!usable) {                                            // no MediaCapabilities: type support only
+      for (const fam in v) if (typeSupported(type, ctype(fam, 1080))) v[fam][key] = [1080, 1080, 0, 0];
+      continue;
+    }
+    const jobs = [];
+    for (const fam in v) for (const h of H) for (const fps of [30, 60]) {
+      jobs.push(query(type, fam, h, fps).then((r) => ({fam, h, fps, r}), () => ({fam, h, fps, r: null})));
+    }
+    for (const {fam, h, fps, r} of await Promise.all(jobs)) {
+      if (!r || !r.supported) continue;
+      const row = v[fam][key], i = fps === 60 ? 1 : 0;
+      if (r.smooth) row[i] = Math.max(row[i], h);
+      if (r.smooth && r.powerEfficient) row[i + 2] = Math.max(row[i + 2], h);
+    }
+  }
+  const aType = (ct) => mse !== "none" ? !!(MSC && MSC.isTypeSupported(ct)) : !!video.canPlayType(ct);
+  return {mse, mtex: MAX_TEX, vtex: videoTexBudget(), v, a: {aac: aType('audio/mp4; codecs="mp4a.40.2"'), opus: aType('audio/webm; codecs="opus"')}};
+}
+
+// ── Video playback (A6 mse, A7 split, file) ─────────────────────────────────
+// One persistent <video> (+ <audio> for split mode), both unlocked in the start tap for iOS.
+let videoHasFrame = false, videoDirty = false, startAt = 0, needTap = false, demoVideoSrc = null;
+// Where the VR video is: lastPos = the server's start until the phone knows the real position, then the
+// playing position. Sent back on B / error.
+let lastPos = 0, posKnown = false;
+let resolving = false;                           // the laptop is getting a video ready (B cancels it)
+const pb = {mode: "", gen: 0, m: null, vid: null, srcKey: "", start: 0, startedAt: 0, mse: null, split: null, aStartDone: false};
+function onVideoMsg(m) {
+  if (m.state !== "progress") resolving = m.state === "resolving";
+  switch (m.state) {
+    case "resolving":
+      if (state.mode === "vr") stopVideo();
+      if (state.mode !== "browser") setMode("browser");
+      hudShow({title: m.title || "Video", text: "Getting the video ready…  B = cancel"}, 60000);
+      break;
+    case "progress":
+      if (!resolving) break;                     // late progress of a download B just cancelled
+      hudShow({title: hud3.title || "Video", text: (m.text || "Getting the video ready…") + "  B = cancel",
+               pct: typeof m.pct === "number" ? m.pct : null}, 60000);   // no pct = no bar (A3)
+      break;
+    case "ready": startVideo(m); break;
+    case "screen":
+      if (state.mode === "vr") stopVideo();
+      setMode("screen");
+      if (kb.open && !kb.inVr) kbClose();
+      hudShow({title: m.title || "Video", text: "Playing on the big screen (sound on the laptop). B = back"}, 5000);
+      break;
+    case "error":
+      if (state.mode === "vr") stopVideo();
+      setMode("browser");
+      hudShow({title: "Could not play this video", text: m.text || ""}, 7000);
+      break;
+    case "exit":                                 // the laptop left VR (typing window, another phone, navigation)
+      if (state.mode === "vr") stopVideo();
+      if (state.mode !== "browser") setMode("browser");
+      hudHide();
+      break;
+  }
+}
+function mediaTime() { return pb.mode === "split" ? (aud.currentTime || 0) : (video.currentTime || 0); }
+function mediaDuration() {
+  const d = video.duration;
+  if (isFinite(d) && d > 0) return d;
+  return pb.m && pb.m.duration > 0 ? pb.m.duration : NaN;
+}
+function videoPos() {
+  const t = posKnown && video.readyState >= 1 ? mediaTime() : lastPos;
+  return Math.round(Math.max(0, t) * 10) / 10;
+}
+function setMode(mode) {
+  const was = state.mode;
+  state.mode = mode;
+  // the right-stick pointer nudge cannot be changed in VR (the stick turns the view there): start straight
+  if ((was === "vr") !== (mode === "vr")) { state.curYaw = 0; state.curPitch = 0; }
+  if (mode !== "browser") state.ptr = mode === "screen" ? state.ptr : null;
+  if (was === "vr" && mode !== "vr" && kb.open && kb.inVr) kbClose();   // D4: leaving VR mode closes it
+}
+function setProj(p) {
+  state.proj = PROJ[p] ? p : "flat";
+  if (gl) setTexMips(videoTex, isCinema(state.proj));      // B2: no per-frame mips for sphere / mesh video
+}
+function startVideo(m) {
+  const v = m.v && m.v.src ? m.v : null;
+  const vsrc = withKey(v ? v.src : (m.src || ""));
+  if (state.mode === "vr" && pb.srcKey && pb.srcKey === vsrc) {
+    // the same video again (the server re-sends "ready" after a reconnect): keep playing where we are
+    state.videoTitle = m.title || state.videoTitle;
+    return;
+  }
+  let start = +m.start || 0;
+  if (state.mode === "vr" && m.vid && m.vid === pb.vid) start = Math.max(start, videoPos());   // a lower rung (A7)
+  if (kb.open && !kb.inVr) kbClose();            // D4: entering VR video mode
+  stopVideo();
+  pb.gen++;
+  pb.m = m; pb.vid = m.vid || null; pb.srcKey = vsrc; pb.start = start; pb.startedAt = performance.now();
+  pb.aStartDone = false;
+  state.vstereo = ["mono", "sbs", "tb"].includes(m.stereo) ? m.stereo : "mono";
+  state.meshLabel = m.mesh_label || null;
+  state.hasMesh = !!m.mesh;
+  state.projAuto = PROJ[m.projection] ? m.projection : "flat";
+  if (state.projAuto === "mesh" && !m.mesh) state.projAuto = "flat";
+  setProj(state.projAuto);
+  state.force2D = false;
+  state.vw = m.w || (v && v.w) || 16; state.vh = m.h || (v && v.h) || 9;
+  state.videoTitle = m.title || "";
+  state.vinfo = {w: v ? v.w : m.w, h: v ? v.h : m.h, codec: v ? v.codec : "", mode: m.mode || "file", format: m.format || ""};
+  startAt = start; lastPos = start; posKnown = false;
+  videoHasFrame = false;
+  setMode("vr");
+  if (m.mesh) loadMesh(m.mesh, pb.gen);
+  const mode = m.mode || "file", a = m.a && m.a.src ? m.a : null;
+  if (mode === "mse" && a && v && v.index && a.index && MSC && v.mime && a.mime) startMse(m);
+  else if ((mode === "mse" || mode === "split") && a && v) startSplit(m);
+  else startFile(vsrc);
+  imageTestArm(m);
+  barShow(4000);
+  hudShow({title: state.videoTitle || "Video", text: projLabel(state.proj) + "  ·  B = back to the browser"}, 4000);
+}
+function startFile(src) {
+  pb.mode = "file";
+  video.muted = false;
+  video.src = src;
+  try { video.load(); } catch (_) {}
+  armRvfc();
+  playVideo();
+}
+function playOne(el) {
+  let p;
+  try { p = el.play(); } catch (e) { p = Promise.reject(e); }
+  return p && p.then ? p : Promise.resolve();
+}
+function playVideo() {
+  needTap = false;
+  const els = pb.mode === "split" ? [aud, video] : [video];
+  const gen = pb.gen;
+  Promise.all(els.map((el) => playOne(el).then(() => null, (e) => e))).then((errs) => {
+    if (gen !== pb.gen) return;
+    if (errs.some((e) => e && e.name === "NotAllowedError")) {
+      needTap = true;
+      hudShow({title: "Tap the screen to start the video", text: state.videoTitle}, Infinity);
+    } else errs.forEach((e) => { if (e && e.name !== "AbortError") console.warn("play:", e.message); });
+  });
+}
+function pauseVideo() {
+  try { video.pause(); } catch (_) {}
+  if (pb.mode === "split") { try { aud.pause(); } catch (_) {} }
+}
+function stopVideo() {
+  needTap = false;
+  pb.gen++;
+  if (pb.mse) { mseStop(pb.mse); pb.mse = null; }
+  if (pb.split) { clearInterval(pb.split.timer); pb.split = null; }
+  try { video.pause(); } catch (_) {}
+  try { aud.pause(); } catch (_) {}
+  if (video.srcObject) { try { video.srcObject = null; } catch (_) {} }
+  if (video.getAttribute("src")) { video.removeAttribute("src"); try { video.load(); } catch (_) {} }
+  if (aud.getAttribute("src")) { aud.removeAttribute("src"); try { aud.load(); } catch (_) {} }
+  video.playbackRate = 1;
+  pb.mode = ""; pb.srcKey = "";
+  videoHasFrame = false;
+  posKnown = false;
+  demoVideoSrc = null;
+  imageTestAbort();
+  if (meshGL) { meshGL.list.forEach((e) => freeMesh(e.mesh)); meshGL = null; }
+}
+function exitVr() {
+  if (state.mode === "vr") {
+    send({t: "vr", action: "exit", time: videoPos()});
+    stopVideo();
+  } else if (state.mode === "screen") {
+    send({t: "vr", action: "exit"});       // no time: the page video itself was playing
+  }
+  setMode("browser");
+  hudHide();
+}
+function failToBrowser(title, text) {            // the v1 error card: back to the browser, keep the position
+  const t = videoPos();
+  stopVideo();
+  setMode("browser");
+  send({t: "vr", action: "exit", time: t});
+  hudShow({title, text}, 7000);
+}
+video.addEventListener("loadedmetadata", () => {
+  if (video.videoWidth && video.videoHeight) { state.vw = video.videoWidth; state.vh = video.videoHeight; }
+  if (pb.mode !== "mse" && startAt > 1 && (!isFinite(video.duration) || startAt < video.duration - 2)) {
+    try { video.currentTime = startAt; } catch (_) {}
+  }
+  startAt = 0;
+  posKnown = true;
+  lastPos = mediaTime();
+});
+aud.addEventListener("loadedmetadata", () => {
+  if (pb.mode !== "split" || pb.aStartDone) return;
+  pb.aStartDone = true;
+  if (pb.start > 1 && (!isFinite(aud.duration) || pb.start < aud.duration - 2)) { try { aud.currentTime = pb.start; } catch (_) {} }
+});
+video.addEventListener("timeupdate", () => {
+  if (posKnown && pb.mode) lastPos = mediaTime();
+  imageTestTick();
+});
+function onMediaError(el) {
+  if (state.mode !== "vr" || !pb.mode || demoVideoSrc) return;
+  const code = el.error ? el.error.code : 0;
+  if (pb.mode === "mse" && el === video && performance.now() - pb.startedAt < 5000) { switchToSplit("decode error " + code); return; }
+  failToBrowser("The phone could not play this video", "error " + code + " - back to the browser");
+}
+video.addEventListener("error", () => { if (video.getAttribute("src") || pb.mode === "mse") onMediaError(video); });
+aud.addEventListener("error", () => { if (pb.mode === "split" && aud.getAttribute("src")) onMediaError(aud); });
+const onEnded = () => { if (state.mode === "vr") { hudShow({title: "Video ended", text: "B = back to the browser"}, Infinity); barShow(4000); } };
+video.addEventListener("ended", onEnded);
+aud.addEventListener("ended", () => { if (pb.mode === "split") { try { video.pause(); } catch (_) {} onEnded(); } });
+// Only show "Buffering…" when the wait lasts (a seek inside the buffer fires "waiting" for a few frames),
+// and hide it as soon as the picture moves again.
+let waitTimer = 0;
+video.addEventListener("waiting", () => {
+  clearTimeout(waitTimer);
+  waitTimer = setTimeout(() => {
+    if (state.mode === "vr" && videoHasFrame && video.readyState < 3 && !video.paused) hudShow({title: "Buffering…", text: ""}, 15000);
+  }, 600);
+});
+for (const ev of ["playing", "seeked", "pause", "emptied"]) video.addEventListener(ev, () => {
+  clearTimeout(waitTimer);
+  if (hud3.title === "Buffering…" && video.readyState >= 3) hudHide();
+});
+video.addEventListener("timeupdate", () => { if (hud3.title === "Buffering…" && video.readyState >= 3 && hud3.until > performance.now()) hudHide(); });
+video.addEventListener("pause", () => { if (state.mode === "vr" && !(pb.split && pb.split.held)) barShow(4000); });
+video.addEventListener("seeking", () => { if (pb.mode === "mse" && pb.mse) mseSeek(pb.mse); });
+
+// --- A6: MSE (one <video>, two SourceBuffers, ranged segment fetches through /media) ---
+async function fetchRange(src, a, b, signal) {
+  // the server answers at most 16 MiB per request: keep asking until the whole range is here
+  const parts = []; let pos = a, total = 0;
+  while (pos <= b) {
+    const r = await fetch(src, {headers: {Range: `bytes=${pos}-${b}`}, signal, cache: "no-store"});
+    if (r.status !== 206) throw new Error("HTTP " + r.status);
+    const buf = new Uint8Array(await r.arrayBuffer());
+    if (!buf.length) throw new Error("empty range");
+    parts.push(buf); pos += buf.length; total += buf.length;
+  }
+  if (parts.length === 1) return parts[0].buffer;
+  const out = new Uint8Array(total); let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out.buffer;
+}
+async function fetchJson(src) {
+  const r = await fetch(src, {cache: "no-store"});
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+const ABORTED = new Error("aborted");
+function sbOp(tr, fn) {                          // run one SourceBuffer operation after the previous ones
+  const p = tr.chain.then(() => new Promise((res, rej) => {
+    const sb = tr.sb;
+    const off = () => { sb.removeEventListener("updateend", ok); sb.removeEventListener("error", bad); };
+    const ok = () => { off(); res(); };
+    const bad = () => { off(); rej(new Error("SourceBuffer error")); };
+    sb.addEventListener("updateend", ok); sb.addEventListener("error", bad);
+    try { fn(sb); } catch (e) { off(); rej(e); }
+  }));
+  tr.chain = p.catch(() => {});
+  return p;
+}
+async function sbAppend(S, tr, buf) {
+  try { await sbOp(tr, (sb) => sb.appendBuffer(buf)); }
+  catch (e) {
+    if (!e || e.name !== "QuotaExceededError" || S.dead) throw e;
+    const ct = video.currentTime || 0;
+    if (ct - 2 > 0.5) await sbOp(tr, (sb) => sb.remove(0, ct - 2)).catch(() => {});
+    S.ahead = Math.max(6, S.ahead / 2);
+    await sbOp(tr, (sb) => sb.appendBuffer(buf));
+  }
+}
+function segAt(tr, t) {                          // index of the segment that contains time t
+  const s = tr.idx.segs; let k = 0;
+  for (let i = 0; i < s.length; i++) { if (s[i][2] <= t + 0.001) k = i; else break; }
+  return k;
+}
+function segAfter(tr, end) {                     // first segment that is not fully buffered up to `end`
+  const s = tr.idx.segs;
+  for (let i = 0; i < s.length; i++) if (s[i][2] + s[i][3] > end + 0.01) return i;
+  return s.length;
+}
+function rangeAt(sb, t) {
+  try {
+    const b = sb.buffered;
+    for (let i = 0; i < b.length; i++) if (b.start(i) <= t + 0.1 && t < b.end(i)) return {start: b.start(i), end: b.end(i)};
+  } catch (_) {}
+  return null;
+}
+function startMse(m) {
+  let ms;
+  try { ms = new MSC(); } catch (e) { switchToSplit("MediaSource: " + e.message); return; }
+  const managed = !!window.ManagedMediaSource && MSC === window.ManagedMediaSource;
+  const S = {ms, m, managed, url: "", streaming: true, ahead: ((m.v.h || 1080) <= 1080) ? 30 : 15,
+             tracks: [], dead: false, ready: false, ended: false, timer: 0, tick: 0,
+             q: null, strikes: 0, lagSent: false};
+  pb.mode = "mse"; pb.mse = S;
+  if (managed) {
+    try { video.disableRemotePlayback = true; } catch (_) {}
+    ms.addEventListener("startstreaming", () => { S.streaming = true; msePump(S); });
+    ms.addEventListener("endstreaming", () => { S.streaming = false; });
+  }
+  ms.addEventListener("sourceopen", () => { mseOpen(S).catch((e) => mseFail(S, e)); }, {once: true});
+  S.url = URL.createObjectURL(ms);
+  video.muted = false;
+  video.src = S.url;
+  armRvfc();
+  playVideo();
+}
+function mkTrack(kind, info, sb) {
+  return {kind, info, sb, src: withKey(info.src), idx: null, next: 0, busy: false, ctrl: null, token: 0, fails: 0,
+          chain: Promise.resolve(), done: false};
+}
+async function mseOpen(S) {
+  if (S.dead) return;
+  const m = S.m, ms = S.ms;
+  if (S.managed && ms.streaming === false) S.streaming = false;
+  try {
+    if (m.duration > 0) ms.duration = m.duration;
+    const vsb = ms.addSourceBuffer(m.v.mime), asb = ms.addSourceBuffer(m.a.mime);
+    try { vsb.mode = "segments"; asb.mode = "segments"; } catch (_) {}
+    S.tracks = [mkTrack("v", m.v, vsb), mkTrack("a", m.a, asb)];
+    // ManagedMediaSource may evict ANY range (also ahead of the playhead) under memory pressure
+    if (S.managed) for (const sb of [vsb, asb]) sb.addEventListener("bufferedchange", () => { mseGapCheck(S); msePump(S); });
+  } catch (e) { throw new Error("addSourceBuffer: " + e.message); }
+  let idx;
+  try { idx = await Promise.all(S.tracks.map((tr) => fetchJson(withKey(tr.info.index)))); }
+  catch (e) { throw new Error("index: " + e.message); }
+  if (S.dead) return;
+  S.tracks.forEach((tr, i) => {
+    const j = idx[i];
+    if (!j || !Array.isArray(j.init) || !Array.isArray(j.segs) || !j.segs.length) throw new Error("index: no segments");
+    tr.idx = j;
+  });
+  const inits = await Promise.all(S.tracks.map((tr) => fetchRange(tr.src, tr.idx.init[0], tr.idx.init[1], null)));
+  if (S.dead) return;
+  await Promise.all(S.tracks.map((tr, i) => sbAppend(S, tr, inits[i])));
+  if (S.dead) return;
+  const st = pb.start, dur = mediaDuration();
+  S.tracks.forEach((tr) => { tr.next = segAt(tr, st); });
+  if (st > 1 && (!isFinite(dur) || st < dur - 2)) { try { video.currentTime = st; } catch (_) {} }
+  S.ready = true;
+  S.timer = setInterval(() => mseTick(S), 250);
+  msePump(S);
+}
+function mseFail(S, e) {
+  if (S.dead || !pb.mse || pb.mse !== S) return;
+  console.warn("MSE failed:", e && e.message);
+  switchToSplit(e && e.message ? e.message : String(e));
+}
+function switchToSplit(reason) {
+  const m = pb.m;
+  if (!m || !m.a || !m.v) { failToBrowser("The phone could not play this video", String(reason).slice(0, 80)); return; }
+  send({t: "vfail", mode: "mse", reason: String(reason || "").slice(0, 200)});
+  const pos = posKnown ? videoPos() : pb.start;
+  if (pb.mse) { mseStop(pb.mse); pb.mse = null; }
+  try { video.pause(); } catch (_) {}
+  video.removeAttribute("src"); try { video.load(); } catch (_) {}
+  pb.start = pos; startAt = pos; lastPos = pos; posKnown = false; pb.aStartDone = false; pb.startedAt = performance.now();
+  state.vinfo && (state.vinfo.mode = "split");
+  startSplit(m);
+}
+function mseStop(S) {
+  S.dead = true;
+  clearInterval(S.timer);
+  for (const tr of S.tracks) { tr.token++; if (tr.ctrl) { try { tr.ctrl.abort(); } catch (_) {} } }
+  if (S.url) { try { URL.revokeObjectURL(S.url); } catch (_) {} }
+}
+function msePump(S) { for (const tr of S.tracks) pumpTrack(S, tr); }
+function pumpTrack(S, tr) {
+  if (S.dead || !S.ready || tr.busy || !tr.idx) return;
+  const segs = tr.idx.segs;
+  if (tr.next >= segs.length) { tr.done = true; mseMaybeEnd(S); return; }
+  if (!S.streaming) return;
+  const ct = video.currentTime || 0, seg = segs[tr.next];
+  if (seg[2] > ct + S.ahead) return;
+  tr.busy = true;
+  const token = ++tr.token, ctrl = new AbortController();
+  tr.ctrl = ctrl;
+  fetchRange(tr.src, seg[0], seg[1], ctrl.signal)
+    .then((buf) => { if (token !== tr.token || S.dead) throw ABORTED; return sbAppend(S, tr, buf); })
+    .then(() => {
+      if (token !== tr.token || S.dead) return;
+      tr.fails = 0; tr.next++; tr.busy = false; tr.ctrl = null;
+      pumpTrack(S, tr);
+    })
+    .catch((e) => {
+      if (token !== tr.token || S.dead || e === ABORTED || (e && e.name === "AbortError")) return;
+      tr.ctrl = null;
+      const sbErr = e && (/SourceBuffer/.test(e.message || "") || e.name === "InvalidStateError");
+      if (sbErr && performance.now() - pb.startedAt < 5000) { mseFail(S, e); return; }
+      tr.fails++;
+      console.warn("segment", tr.kind, tr.next, "failed:", e && e.message, "try", tr.fails);
+      if (tr.fails >= 3) { failToBrowser("Lost the video stream", "back to the browser"); return; }
+      setTimeout(() => { if (token !== tr.token || S.dead) return; tr.busy = false; pumpTrack(S, tr); }, tr.fails === 1 ? 1000 : 3000);
+    });
+}
+function mseTick(S) {
+  if (S.dead) return;
+  S.tick++;
+  if (S.tick % 8 === 0) {                        // every 2 s: keep 10 s behind the play position
+    const ct = video.currentTime || 0;
+    for (const tr of S.tracks) {
+      let b0 = null;
+      try { if (tr.sb.buffered.length) b0 = tr.sb.buffered.start(0); } catch (_) {}
+      if (b0 != null && ct - 10 > b0 + 1) sbOp(tr, (sb) => sb.remove(0, ct - 10)).catch(() => {});
+    }
+  }
+  if (S.tick % 20 === 0) mseLagCheck(S);         // every 5 s
+  mseGapCheck(S);
+  msePump(S);
+}
+// The browser may evict data AHEAD of the playhead (ManagedMediaSource under memory pressure, Chrome's
+// SourceBuffer GC when it cannot free enough behind). tr.next only moves forward, so a hole between the
+// playhead and tr.next would stall forever: refetch from the end of the range we are in.
+function mseGapCheck(S) {
+  if (S.dead || !S.ready || video.seeking) return;
+  const ct = video.currentTime || 0;
+  for (const tr of S.tracks) {
+    if (!tr.idx) continue;
+    const segs = tr.idx.segs, r = rangeAt(tr.sb, ct), end = r ? r.end : ct;
+    const last = segs[segs.length - 1], nextT = tr.next < segs.length ? segs[tr.next][2] : last[2] + last[3];
+    if (nextT <= end + 0.25) continue;
+    const to = r ? segAfter(tr, end) : segAt(tr, ct);
+    if (to >= tr.next) continue;
+    console.warn("MSE: buffered data was evicted ahead of the playhead (" + tr.kind + "), refetching from segment " + to);
+    tr.token++;
+    if (tr.ctrl) { try { tr.ctrl.abort(); } catch (_) {} }
+    tr.ctrl = null; tr.busy = false; tr.done = false; tr.fails = 0; tr.next = to;
+    S.ended = false;
+  }
+}
+// The phone decodes but cannot keep up (dropped frames): ask the server for a lower rung, like split mode.
+function mseLagCheck(S) {
+  if (!video.getVideoPlaybackQuality || video.paused || video.seeking || video.readyState < 3) { S.q = null; return; }
+  const q = video.getVideoPlaybackQuality(), p = S.q;
+  S.q = {tot: q.totalVideoFrames, drop: q.droppedVideoFrames};
+  if (!p || S.lagSent) return;
+  const tot = q.totalVideoFrames - p.tot, drop = q.droppedVideoFrames - p.drop;
+  if (tot < 30) return;                          // not enough frames in this window to judge
+  if (drop / tot > 0.15) S.strikes++; else S.strikes = 0;
+  if (S.strikes >= 2) {
+    S.lagSent = true;
+    console.warn("MSE: dropping " + Math.round(100 * drop / tot) + "% of the frames: asking for a lower quality");
+    send({t: "vfail", mode: "mse", reason: "lag", time: +videoPos().toFixed(2)});
+  }
+}
+function mseSeek(S) {
+  if (S.dead || !S.ready) return;
+  const t = video.currentTime || 0;
+  S.ended = false;
+  for (const tr of S.tracks) {
+    tr.token++;
+    if (tr.ctrl) { try { tr.ctrl.abort(); } catch (_) {} }
+    tr.ctrl = null; tr.busy = false; tr.done = false; tr.fails = 0;
+    const r = rangeAt(tr.sb, t);
+    if (r) tr.next = segAfter(tr, r.end);
+    else {
+      tr.chain = tr.chain.then(() => { try { if (S.ms.readyState === "open" && !tr.sb.updating) tr.sb.abort(); } catch (_) {} });
+      tr.next = segAt(tr, t);
+    }
+  }
+  msePump(S);
+}
+function mseMaybeEnd(S) {
+  if (S.ended || !S.tracks.every((tr) => tr.done)) return;
+  S.ended = true;
+  Promise.all(S.tracks.map((tr) => tr.chain)).then(() => {
+    if (S.dead || !S.tracks.every((tr) => tr.done)) { S.ended = false; return; }
+    try { if (S.ms.readyState === "open" && !S.tracks.some((tr) => tr.sb.updating)) S.ms.endOfStream(); else S.ended = false; }
+    catch (_) { S.ended = false; }
+  });
+}
+
+// --- A7: split mode (muted <video> + <audio>, the audio is the clock) ---
+function startSplit(m) {
+  pb.mode = "split";
+  const S = {timer: 0, seeks: [], lastSeek: 0, failSent: false, held: false};
+  pb.split = S;
+  video.muted = true;
+  video.src = withKey(m.v.src);
+  aud.src = withKey(m.a.src);
+  try { video.load(); aud.load(); } catch (_) {}
+  armRvfc();
+  playVideo();
+  S.timer = setInterval(() => splitTick(S), 250);
+}
+function splitTick(S) {
+  if (pb.split !== S) return;
+  // the audio (the clock) is waiting for data: hold the picture instead of letting it run ahead, and do not
+  // blame the video decoder for a network stall
+  if (!aud.paused && !aud.seeking && aud.readyState < 3) {
+    if (!video.paused) { S.held = true; try { video.pause(); } catch (_) {} }
+    return;
+  }
+  if (S.held) {
+    S.held = false;
+    if (!aud.paused) { try { video.currentTime = aud.currentTime; } catch (_) {} video.play().catch(() => {}); }
+    return;
+  }
+  if (video.paused || aud.paused || video.seeking || aud.seeking || video.readyState < 3 || aud.readyState < 3) return;
+  const drift = video.currentTime - aud.currentTime, ad = Math.abs(drift), now = performance.now();
+  if (ad > 0.5) {
+    if (now - S.lastSeek > 3000) {
+      S.lastSeek = now;
+      try { video.currentTime = aud.currentTime; } catch (_) {}
+      if (drift < 0) { S.seeks = S.seeks.filter((t) => now - t < 20000); S.seeks.push(now); }   // only "video behind" is lag
+      if (S.seeks.length >= 3 && !S.failSent) {       // the phone cannot keep up: ask for a lower rung
+        S.failSent = true;
+        send({t: "vfail", mode: "split", reason: "lag"});
+      }
+    }
+  } else if (ad > 0.08) video.playbackRate = drift > 0 ? 0.97 : 1.03;
+  else if (ad < 0.03) video.playbackRate = 1;
+}
+function seekTo(t) {
+  const d = mediaDuration();
+  t = clamp(t, 0, isFinite(d) ? Math.max(0, d - 0.5) : Infinity);
+  try {
+    if (pb.mode === "split") { aud.currentTime = t; video.currentTime = t; }
+    else video.currentTime = t;
+  } catch (_) {}
+}
+
+// New video frames -> texture (requestVideoFrameCallback where available, else every animation frame)
+const HAS_RVFC = "requestVideoFrameCallback" in HTMLVideoElement.prototype;
+let rvfcHandle = 0, lastRvfc = 0;
+function onVideoFrame() { videoDirty = true; lastRvfc = performance.now(); rvfcHandle = video.requestVideoFrameCallback(onVideoFrame); }
+function armRvfc() {                             // exactly one pending callback (re-armed for every new video)
+  if (!HAS_RVFC) return;
+  if (rvfcHandle) { try { video.cancelVideoFrameCallback(rvfcHandle); } catch (_) {} }
+  rvfcHandle = video.requestVideoFrameCallback(onVideoFrame);
+}
+armRvfc();
+function updateVideoTexture() {
+  if (demoVideoSrc) return;
+  if (state.mode !== "vr" || video.readyState < 2 || !video.videoWidth) return;
+  // rVFC drives uploads; if it goes quiet while playing (seen on some WebKit builds), upload every frame
+  const rvfcQuiet = HAS_RVFC && !video.paused && performance.now() - lastRvfc > 300;
+  if (HAS_RVFC && !videoDirty && !rvfcQuiet) return;
+  if (!HAS_RVFC && video.paused && videoHasFrame) return;
+  videoDirty = false;
+  if (uploadTex(videoTex, video, video.videoWidth, video.videoHeight, isCinema(state.proj))) videoHasFrame = true;
+}
+function isPaused() { return demoVideoSrc ? !!state.demoPaused : (pb.mode === "split" ? aud.paused : video.paused); }
+function togglePlay() {
+  if (state.mode !== "vr") return;
+  if (demoVideoSrc) { state.demoPaused = !state.demoPaused; barShow(4000); return; }
+  if (isPaused()) { playVideo(); hudShow({title: "▶ Play", text: timeText()}, 1500); }
+  else { pauseVideo(); hudShow({title: "❚❚ Paused", text: timeText()}, 2500); }
+  barShow(4000);
+}
+function fmtT(s) {
+  if (!isFinite(s)) return "--:--";
+  s = Math.max(0, Math.floor(s));
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, sec = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sec).padStart(2, "0");
+}
+function timeText() { return fmtT(mediaTime()) + " / " + fmtT(mediaDuration()); }
+function seek(ds) {
+  if (state.mode !== "vr" || !pb.mode) return;
+  seekTo(mediaTime() + ds);
+  const d = mediaDuration();
+  hudShow({title: (ds < 0 ? "◀◀ " : "▶▶ ") + Math.abs(ds) + " s", text: timeText(),
+           pct: isFinite(d) && d > 0 ? mediaTime() / d * 100 : null}, 1800);
+}
+function cycleProjection() {
+  if (state.mode !== "vr") return;
+  imageTestAbort();
+  let i = Y_CYCLE.indexOf(state.proj), next;
+  do { i = (i + 1) % Y_CYCLE.length; next = Y_CYCLE[i]; } while (next === "mesh" && !state.hasMesh);
+  userProjection(next);
+}
+function userProjection(p) {
+  imageTestAbort();
+  setProj(p);
+  hudShow({title: projLabel(p) + (p === state.projAuto ? " (auto)" : ""), text: "Y = try the next one"}, 2500);
+  if (pb.vid) send({t: "proj", vid: pb.vid, projection: p, source: "user"});
+}
+function unlockVideo() {                       // inside the start tap: lets later play() calls have sound (iOS)
+  for (const el of [video, aud]) {
+    try {
+      el.muted = true;
+      const p = el.play();
+      if (p && p.catch) p.catch(() => {});
+      el.pause();
+      el.muted = false;
+    } catch (_) {}
+  }
+}
+
+// --- B6: projection mesh from the server (G4) ---
+let meshGL = null;                               // {list: [{mesh, eye}], label}
+function loadMesh(url, gen) {
+  fetchJson(withKey(url)).then((j) => {
+    if (gen !== pb.gen || !gl) return;
+    const list = [];
+    (j.meshes || []).forEach((e, i) => {
+      const n = Math.floor((e.pos || []).length / 3);
+      if (!n) return;
+      const v = new Float32Array(n * 5);
+      for (let k = 0; k < n; k++) {
+        v[k * 5] = e.pos[k * 3]; v[k * 5 + 1] = e.pos[k * 3 + 1]; v[k * 5 + 2] = e.pos[k * 3 + 2];
+        v[k * 5 + 3] = e.uv[k * 2] || 0; v[k * 5 + 4] = e.uv[k * 2 + 1] || 0;
+      }
+      const prim = e.prim === "strip" ? gl.TRIANGLE_STRIP : e.prim === "fan" ? gl.TRIANGLE_FAN : gl.TRIANGLES;
+      list.push({mesh: makeMesh(v, e.idx && e.idx.length ? e.idx : null, prim), eye: e.eye === 0 || e.eye === 1 ? e.eye : null, i});
+    });
+    // no eye field: with two meshes mesh 0 = left, mesh 1 = right; with one, both eyes
+    if (list.length === 2 && list.every((x) => x.eye === null)) { list[0].eye = 0; list[1].eye = 1; }
+    meshGL = {list, label: j.label || null};
+    if (j.label && !state.meshLabel) state.meshLabel = j.label;
+  }).catch((e) => console.warn("mesh:", e.message));
+}
+
+// ── C3: phone image test (is this video really side by side / top-bottom?) ──
+const IT = {on: false, cand: "flat", src: "", t0: 0, k: 0, samples: [], canvas: null, g: null};
+const IT_SLOTS = [1.5, 3, 5, 8, 12];
+function imageTestArm(m) {
+  const fam = PROJ[state.proj] && PROJ[state.proj].fam;
+  IT.on = !!m.image_test && (fam === "flat" || fam === "equirect" || fam === "half");
+  IT.cand = state.proj; IT.src = m.projection_source || ""; IT.t0 = pb.start; IT.k = 0; IT.samples = [];
+}
+function imageTestAbort() { IT.on = false; }
+function imageTestTick() {
+  if (!IT.on || state.mode !== "vr" || video.paused || video.readyState < 2 || !video.videoWidth) return;
+  const t = (video.currentTime || 0) - IT.t0;
+  const slot = IT.k < IT_SLOTS.length ? IT_SLOTS[IT.k] : 12 + 3 * (IT.k - IT_SLOTS.length + 1);
+  if (t < slot) return;
+  IT.k++;
+  let s = null;
+  try { s = imageScore(video); } catch (e) { console.warn("image test:", e.message); IT.on = false; return; }
+  if (s) IT.samples.push(s);
+  if ((IT.k >= IT_SLOTS.length && IT.samples.length >= 3) || IT.k >= 11) imageTestDecide();
+}
+function ncc(A, aw, ax, ay, B, bw, bx, by, w, h) {
+  let sa = 0, sb = 0; const n = w * h;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { sa += A[(ay + y) * aw + ax + x]; sb += B[(by + y) * bw + bx + x]; }
+  const ma = sa / n, mb = sb / n;
+  let va = 0, vb = 0, cv = 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const a = A[(ay + y) * aw + ax + x] - ma, b = B[(by + y) * bw + bx + x] - mb;
+    va += a * a; vb += b * b; cv += a * b;
+  }
+  if (va < 1e-6 || vb < 1e-6) return 0;
+  return cv / Math.sqrt(va * vb);
+}
+function bestShift(A, B, w, h, m) {             // max NCC over x shifts -m..m, y shifts -1..1
+  let r = -1;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -m; dx <= m; dx++)
+    r = Math.max(r, ncc(A, w, m, 1, B, w, m + dx, 1 + dy, w - 2 * m, h - 2));
+  return r;
+}
+function crop(img, W, x0, y0, w, h) {
+  const o = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) o[y * w + x] = img[(y0 + y) * W + x0 + x];
+  return o;
+}
+function edges(img, w, h) {                      // |dx| + |dy|, (w-1) x (h-1)
+  const o = new Float32Array((w - 1) * (h - 1));
+  for (let y = 0; y < h - 1; y++) for (let x = 0; x < w - 1; x++) {
+    const c = img[y * w + x];
+    o[y * (w - 1) + x] = Math.abs(img[y * w + x + 1] - c) + Math.abs(img[(y + 1) * w + x] - c);
+  }
+  return o;
+}
+function imageScore(src) {
+  const W = 128, H = 72;
+  if (!IT.canvas) { IT.canvas = document.createElement("canvas"); IT.canvas.width = W; IT.canvas.height = H; IT.g = IT.canvas.getContext("2d", {willReadFrequently: true}); }
+  IT.g.drawImage(src, 0, 0, W, H);
+  const d = IT.g.getImageData(0, 0, W, H).data, img = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) img[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  const all = edges(img, W, H);
+  let mean = 0; for (let i = 0; i < all.length; i++) mean += all[i]; mean /= all.length;
+  if (mean < 2.0) return null;                   // black frame / fade
+  const L = crop(img, W, 0, 0, W / 2, H), R = crop(img, W, W / 2, 0, W / 2, H);
+  const T = crop(img, W, 0, 0, W, H / 2), B = crop(img, W, 0, H / 2, W, H / 2);
+  return {LR: bestShift(L, R, W / 2, H, 4), LRedge: bestShift(edges(L, W / 2, H), edges(R, W / 2, H), W / 2 - 1, H - 1, 4),
+          TB: bestShift(T, B, W, H / 2, 4), TBedge: bestShift(edges(T, W, H / 2), edges(B, W, H / 2), W - 1, H / 2 - 1, 4)};
+}
+const median = (a) => { const s = a.slice().sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+function imageTestDecide() {
+  IT.on = false;
+  const S = IT.samples;
+  if (S.length < 3) return;
+  const r2 = (x) => Math.round(x * 1000) / 1000;
+  const sc = {LR: r2(median(S.map((s) => s.LR))), LRedge: r2(median(S.map((s) => s.LRedge))),
+              TB: r2(median(S.map((s) => s.TB))), TBedge: r2(median(S.map((s) => s.TBedge))), n: S.length};
+  const fam = PROJ[IT.cand].fam;
+  const candSt = IT.src === "title" ? PROJ[IT.cand].st : "mono";
+  const Tsbs = candSt === "sbs" ? 0.45 : 0.62, Ttb = candSt === "tb" ? 0.45 : 0.62;
+  let layout = "mono";
+  if (sc.LRedge >= Tsbs && sc.LR >= 0.85 && sc.LRedge - sc.TBedge >= 0.3) layout = "sbs";
+  else if (sc.TBedge >= Ttb && sc.TB >= 0.85 && sc.TBedge - sc.LRedge >= 0.3) layout = "tb";
+  const target = FAM_IDS[fam][layout];
+  IT.result = Object.assign({layout, target}, sc);
+  if (state.mode !== "vr") return;
+  if (candSt === "mono" && layout !== "mono") {
+    // No server candidate (a plain untagged video): side-by-side comparisons, split-screen and dual-cam
+    // videos score like real 3D, so only suggest it and do not save it (the user decides with Y).
+    IT.result.target = state.proj;
+    hudShow({title: "Looks 3D? press Y", text: layout === "sbs" ? "side by side" : "top/bottom"}, 4000);
+    return;
+  }
+  if (target !== state.proj) {
+    setProj(target);
+    if (layout === "sbs") hudShow({title: "Detected 3D side by side", text: "Y to change"}, 4000);
+    else if (layout === "tb") hudShow({title: "Detected 3D top/bottom", text: "Y to change"}, 4000);
+    else hudShow({title: "Not 3D: " + projLabel(target), text: "Y to change"}, 4000);
+  } else if (layout === "mono" && ((sc.LRedge >= 0.45 && sc.LRedge < 0.62) || (sc.TBedge >= 0.45 && sc.TBedge < 0.62))) {
+    hudShow({title: "Looks 3D? press Y", text: ""}, 4000);
+  }
+  if (pb.vid) send({t: "proj", vid: pb.vid, projection: target, source: "image", scores: sc});
+}
+
+// ── D2: controller source badge ─────────────────────────────────────────────
+let phonePadId = "", testPadOn = false;
+const BADGE_COL = {ok: "#7ee787", warn: "#ffb347", bad: "#ff6b6b"};
+function padSource() {
+  const now = performance.now();
+  const lap = !!laptopPad && now - laptopPadAt < 1500;
+  const ph = phonePadId || (testPadOn ? "test pad" : "");
+  if (lap && ph) return {s: "both", text: "Pad: laptop + phone", short: "Pad: laptop + phone", col: BADGE_COL.ok};
+  if (lap) return {s: "laptop", text: "Pad: laptop", short: "Pad: laptop", col: BADGE_COL.ok};
+  if (ph) return {s: "phone", text: `Pad: phone (${ph.slice(0, 24)})`, short: "Pad: phone", col: BADGE_COL.ok};
+  if (ws && ws.readyState === 1)
+    return {s: "none", text: "No controller (plug it into the laptop or pair it with the phone)", short: "No controller", col: BADGE_COL.warn};
+  return {s: "down", text: "No controller (laptop not connected)", short: "No controller", col: BADGE_COL.bad};
+}
+const BADGE_TOAST = {both: "laptop + phone connected", laptop: "laptop connected", phone: "phone connected",
+                     none: "none (plug it into the laptop or pair it with the phone)", down: "none (laptop not connected)"};
+let badgeS = "", badgeSince = 0, badgeShown = "";
+function badgeWatch(now) {                       // 3D toast when the source changes (after the first 3 s, stable 0.5 s)
+  const s = padSource().s;
+  if (s !== badgeS) { badgeS = s; badgeSince = now; }
+  if (now - LOAD_T < 3000) { badgeShown = s; return; }
+  if (s !== badgeShown && now - badgeSince > 500) {
+    badgeShown = s;
+    hudShow({title: "Controller: " + BADGE_TOAST[s], text: ""}, 3000);
+  }
+}
+function drawBadge(g, xRight, y, maxW, px) {     // right-aligned dot + text; returns nothing
+  const b = padSource();
+  g.font = `600 ${px}px ${FONT}`;
+  let t = b.text;
+  if (g.measureText(t).width > maxW - px) t = b.short;
+  t = fitText(g, t, maxW - px);
+  const tw = g.measureText(t).width;
+  g.textAlign = "left"; g.textBaseline = "middle";
+  g.fillStyle = b.col;
+  g.beginPath(); g.arc(xRight - tw - px * 0.55, y, px * 0.28, 0, Math.PI * 2); g.fill();
+  g.fillText(t, xRight - tw, y);
+  return b.s + t;
+}
+
+// ── D4: virtual keyboard ────────────────────────────────────────────────────
+const kbUi = uiCanvas(2048, 768);
+const kb = {open: false, mode: "address", input: "text", enter: "", layer: "letters", shift: 0, shiftAt: 0,
+            buf: "", caret: 0, selAll: false, auto: false, inVr: false, yaw: 0, typed: "",
+            hi: {r: 1, c: 0}, padDir: null};
+const K = (label, act, w, s) => ({label, act, w: w || 1, s});
+const ch = (c) => K(c, "char", 1, c);
+const ROW4 = (lbl) => [K(lbl, "layer", 1.5), K("Esc", "esc", 1), ch("@"), K("space", "space", 4), ch("/"),
+                       K(".com", "com", 1.5), K("←", "left", 0.5), K("→", "right", 0.5)];
+const KB_LAYERS = {
+  letters: [
+    [...[..."qwertyuiop"].map(ch), K("⌫", "bksp", 1)],
+    [...[..."asdfghjkl'"].map(ch), K("↵", "enter", 1)],
+    [K("⇧", "shift", 1), ...[..."zxcvbnm,."].map(ch), K("⇧", "shift", 1)],
+    ROW4("?123"),
+  ],
+  symbols: [
+    [...[..."1234567890"].map(ch), K("⌫", "bksp", 1)],
+    [...[..."-_=+:;\"()&"].map(ch), K("↵", "enter", 1)],
+    [K("ABC", "layer", 1.5), ...[..."#$%*!?\\~|"].map(ch), K("Tab", "tab", 0.5)],
+    ROW4("abc"),
+  ],
+};
+const KB_CLOSE = K("✕", "close", 1);
+const KB_X0 = 24, KB_UNIT = (2048 - 48) / 11, KB_TOP = 140, KB_ROWH = (768 - KB_TOP - 12) / 4;
+function kbRows() { return [[KB_CLOSE], ...KB_LAYERS[kb.layer]]; }
+function kbKeyRect(r, c) {                       // canvas rect of key (row r, col c); row 0 = the close key
+  if (r === 0) return {x: 2048 - KB_X0 - KB_UNIT, y: 16, w: KB_UNIT, h: KB_TOP - 32};
+  const row = kbRows()[r];
+  let x = KB_X0;
+  for (let i = 0; i < c; i++) x += row[i].w * KB_UNIT;
+  return {x, y: KB_TOP + (r - 1) * KB_ROWH, w: row[c].w * KB_UNIT, h: KB_ROWH};
+}
+function kbKeyAt(px, py) {
+  const rows = kbRows();
+  for (let r = 0; r < rows.length; r++) for (let c = 0; c < rows[r].length; c++) {
+    const q = kbKeyRect(r, c);
+    if (px >= q.x && px < q.x + q.w && py >= q.y && py < q.y + q.h) return {r, c};
+  }
+  return null;
+}
+function kbQuad() {
+  return quadAt(kb.yaw, -30 * deg, 1.4, 1.3, 0.4875);
+}
+function enterLabel() {
+  if (kb.mode === "address") return "Go";
+  return {go: "Go", search: "Search", send: "Send", next: "Next", done: "Done"}[String(kb.enter || "").toLowerCase()] || "↵";
+}
+function kbOpen(mode, o = {}) {
+  const wasOpen = kb.open;
+  kb.open = true; kb.mode = mode;
+  kb.input = String(o.input || (mode === "address" ? "url" : "text")).toLowerCase();
+  kb.enter = String(o.enter || "");
+  kb.auto = !!o.auto;
+  kb.layer = (kb.input === "number" || kb.input === "tel") ? "symbols" : "letters";
+  kb.shift = 0;
+  kb.typed = "";
+  if (mode === "address") {
+    const u = o.buf != null ? o.buf : (activeIsBlank() ? "" : activeUrl());
+    kb.buf = String(u).slice(0, 2000); kb.caret = kb.buf.length; kb.selAll = kb.buf.length > 0;
+  } else { kb.buf = ""; kb.caret = 0; kb.selAll = false; }
+  kb.inVr = state.mode === "vr";
+  if (!wasOpen) {
+    kb.yaw = kb.inVr ? headYawOf(currentRotation()) : 0;
+    kb.hi = {r: 1, c: 0}; kb.padDir = null;
+  }
+}
+function kbClose() {
+  if (kb.open && kb.inVr && state.mode === "vr") { state.curYaw = 0; state.curPitch = 0; }   // the nudge was for the keys only
+  kb.open = false; kb.auto = false;
+}
+function kbToggle() {
+  if (kb.open) { kbClose(); return; }
+  const f = state.info.focus;
+  if (f) kbOpen("field", {input: f.input, enter: f.enter});
+  else kbOpen("address");
+}
+function onKbdMsg(m) {
+  if (m.open) {
+    if (state.mode !== "browser" && state.mode !== "screen") return;
+    if (kb.open && kb.mode === "address") return;
+    if (kb.open && kb.mode === "field") {        // already open: just follow the new field
+      kb.input = String(m.input || kb.input).toLowerCase(); kb.enter = String(m.enter || ""); return;
+    }
+    kbOpen("field", {auto: true, input: m.input, enter: m.enter});
+  } else if (kb.open && kb.auto) kbClose();
+}
+function kbText(s) {
+  if (kb.mode === "field") {
+    send({t: "text", s});
+    kb.typed = (kb.typed + s).slice(-60);
+  } else {
+    if (kb.selAll) { kb.buf = ""; kb.caret = 0; kb.selAll = false; }
+    kb.buf = (kb.buf.slice(0, kb.caret) + s + kb.buf.slice(kb.caret)).slice(0, 2000);
+    kb.caret = Math.min(kb.buf.length, kb.caret + s.length);
+  }
+}
+function kbBackspace() {
+  if (kb.mode === "field") { send({t: "key", key: "Backspace"}); kb.typed = kb.typed.slice(0, -1); return; }
+  if (kb.selAll) { kb.buf = ""; kb.caret = 0; kb.selAll = false; return; }
+  if (kb.caret > 0) { kb.buf = kb.buf.slice(0, kb.caret - 1) + kb.buf.slice(kb.caret); kb.caret--; }
+}
+function kbEnter() {
+  if (kb.mode === "field") { send({t: "key", key: "Enter"}); return; }
+  const u = kb.buf.trim();
+  if (u) send({t: "nav", to: "url", url: u.slice(0, 4000)});
+  kbClose();
+}
+function kbCaret(d) {
+  if (kb.mode === "field") { send({t: "key", key: d < 0 ? "ArrowLeft" : "ArrowRight"}); return; }
+  if (kb.selAll) { kb.selAll = false; kb.caret = d < 0 ? 0 : kb.buf.length; return; }
+  kb.caret = clamp(kb.caret + d, 0, kb.buf.length);
+}
+function kbShift() {
+  const now = performance.now();
+  if (kb.shift === 2) kb.shift = 0;
+  else if (kb.shift === 1 && now - kb.shiftAt < 400) kb.shift = 2;   // two presses within 400 ms = caps lock
+  else kb.shift = kb.shift ? 0 : 1;
+  kb.shiftAt = now;
+}
+function kbLayer() { kb.layer = kb.layer === "letters" ? "symbols" : "letters"; kb.shift = kb.shift === 2 ? 2 : 0; kbFixHi(); }
+function kbFixHi() {
+  const rows = kbRows();
+  kb.hi.r = clamp(kb.hi.r, 0, rows.length - 1);
+  kb.hi.c = clamp(kb.hi.c, 0, rows[kb.hi.r].length - 1);
+}
+function kbPress(k) {
+  switch (k.act) {
+    case "char": {
+      let c = k.s;
+      if (kb.shift && /[a-z]/.test(c)) c = c.toUpperCase();
+      kbText(c);
+      if (kb.shift === 1) kb.shift = 0;
+      break;
+    }
+    case "bksp": kbBackspace(); break;
+    case "enter": kbEnter(); break;
+    case "shift": kbShift(); break;
+    case "layer": kbLayer(); break;
+    case "esc": if (kb.mode === "field") send({t: "key", key: "Escape"}); else kbClose(); break;
+    case "space": kbText(" "); break;
+    case "com": kbText(".com"); break;
+    case "left": kbCaret(-1); break;
+    case "right": kbCaret(1); break;
+    case "tab": if (kb.mode === "field") send({t: "key", key: "Tab"}); break;
+    case "close": kbClose(); break;
+  }
+  kb.flash = {r: kb.hi.r, c: kb.hi.c, t: performance.now()};
+}
+function kbPressHi() { kbFixHi(); const k = kbRows()[kb.hi.r][kb.hi.c]; if (k) kbPress(k); }
+function kbMove(dir) {                           // d-pad / left stick: 11 up, 12 down, 13 left, 14 right
+  kbFixHi();
+  const rows = kbRows();
+  if (dir === 13 || dir === 14) {
+    const n = rows[kb.hi.r].length;
+    kb.hi.c = (kb.hi.c + (dir === 14 ? 1 : n - 1)) % n;
+  } else {
+    const cur = kbKeyRect(kb.hi.r, kb.hi.c), cx = cur.x + cur.w / 2;
+    const r = (kb.hi.r + (dir === 12 ? 1 : rows.length - 1)) % rows.length;
+    let best = 0, bd = Infinity;
+    for (let c = 0; c < rows[r].length; c++) {
+      const q = kbKeyRect(r, c), d = Math.abs(q.x + q.w / 2 - cx);
+      if (d < bd) { bd = d; best = c; }
+    }
+    kb.hi = {r, c: best};
+  }
+  kb.padDir = rayDir(currentRotation());         // ignore the gaze until it moves 1.5° from here
+}
+function kbGaze(h, dir) {
+  if (!h) return;
+  if (kb.padDir) {
+    if (Math.acos(clamp(dot3(kb.padDir, dir), -1, 1)) < 1.5 * deg) return;
+    kb.padDir = null;
+  }
+  const k = kbKeyAt(h.u * 2048, h.v * 768);
+  if (k) kb.hi = k;
+}
+function kbButton(b) {                           // controller while the keyboard is open; true = handled
+  switch (b) {
+    case 0:
+      // the ring is on the page / tab strip / player bar (and the highlight was not just moved with the pad):
+      // A clicks there, as the ring shows; the auto keyboard follows the new focus
+      if (state.ptrTarget === "page" || state.ptrTarget === "chrome" || state.ptrTarget === "bar") {
+        const padHi = kb.padDir && Math.acos(clamp(dot3(kb.padDir, rayDir(currentRotation())), -1, 1)) < 1.5 * deg;
+        if (!padHi) return false;
+      }
+      kbPressHi(); return true;
+    case 1: case 7: kbClose(); return true;
+    case 8: hudShow({title: "Close the keyboard first (L3)", text: "then R3 = new window"}, 2500); return true;
+    case 2: kbBackspace(); return true;
+    case 3: kbText(" "); return true;
+    case 6: kbEnter(); return true;
+    case 9: kbShift(); return true;
+    case 10: kbLayer(); return true;
+    case 15: kbCaret(-1); return true;
+    case 16: kbCaret(1); return true;
+    case 11: case 12: case 13: case 14: kbMove(b); return true;
+  }
+  return false;                                  // View (lens): the mode's own mapping
+}
+function kbDraw(now) {
+  const U = kbUi, g = U.g;
+  const fl = kb.flash && now - kb.flash.t < 150 ? kb.flash : null;
+  const shown = kb.mode === "address" ? kb.buf : (kb.input === "password" ? "•".repeat(kb.typed.length) : kb.typed);
+  const key = [kb.mode, kb.input, kb.enter, kb.layer, kb.shift, shown, kb.caret, kb.selAll, kb.hi.r, kb.hi.c,
+               fl ? fl.r + "," + fl.c : "", padSource().text, Math.floor(now / 530) % 2].join("|");
+  if (key === U.key) return;
+  U.key = key;
+  g.fillStyle = "#0b0e16"; g.fillRect(0, 0, 2048, 768);
+  g.strokeStyle = "#33405a"; g.lineWidth = 6; g.strokeRect(3, 3, 2042, 762);
+  // preview row
+  g.textBaseline = "middle"; g.textAlign = "left";
+  g.font = `600 46px ${FONT}`; g.fillStyle = "#9aa4b2";
+  const label = kb.mode === "address" ? "Address:" : "Typing into: " + kb.input;
+  g.fillText(label, KB_X0 + 8, 70);
+  const bx = KB_X0 + 16 + g.measureText(label).width + 20, bw = 2048 - KB_X0 - KB_UNIT - 420 - bx;
+  g.fillStyle = "#161b27"; rr(g, bx, 22, bw, 96, 16); g.fill();
+  g.font = `52px ${FONT}`;
+  let pre = shown.slice(0, kb.mode === "address" ? kb.caret : shown.length), post = kb.mode === "address" ? shown.slice(kb.caret) : "";
+  const room = bw - 40;
+  while (pre.length > 0 && g.measureText(pre).width > room * 0.8) pre = pre.slice(1);   // keep the caret in view
+  post = fitText(g, post, Math.max(0, room - g.measureText(pre).width));
+  const tx = bx + 20, pw = g.measureText(pre).width;
+  if (kb.selAll && shown) { g.fillStyle = "#264f8c"; g.fillRect(tx - 4, 40, Math.min(room, pw + g.measureText(post).width) + 8, 60); }
+  g.fillStyle = "#f2f5fa"; g.fillText(pre, tx, 72); g.fillText(post, tx + pw, 72);
+  if (!shown && kb.mode === "address") { g.fillStyle = "#6b768a"; g.fillText("Type an address or search", tx, 72); }
+  if (Math.floor(now / 530) % 2 === 0 || kb.selAll) { g.fillStyle = "#2f81f7"; g.fillRect(tx + pw + 1, 38, 5, 66); }
+  drawBadge(g, 2048 - KB_X0 - KB_UNIT - 24, 70, 380, 34);
+  // keys
+  const rows = kbRows();
+  for (let r = 0; r < rows.length; r++) for (let c = 0; c < rows[r].length; c++) {
+    const k = rows[r][c], q = kbKeyRect(r, c);
+    const hi = kb.hi.r === r && kb.hi.c === c, flash = fl && fl.r === r && fl.c === c;
+    const special = k.act !== "char";
+    const lit = k.act === "shift" && kb.shift === 2;
+    g.fillStyle = flash ? "#9cc4ff" : hi ? "#2f81f7" : lit ? "#2f6b3a" : special ? "#1a2030" : "#242b3b";
+    rr(g, q.x + 5, q.y + 5, q.w - 10, q.h - 10, 18); g.fill();
+    if (k.act === "shift" && kb.shift === 1 && !hi) { g.strokeStyle = "#7ee787"; g.lineWidth = 5; g.stroke(); }
+    let lbl = k.label;
+    if (k.act === "char" && kb.shift && /[a-z]/.test(lbl)) lbl = lbl.toUpperCase();
+    if (k.act === "enter") lbl = enterLabel();
+    g.fillStyle = "#f2f5fa"; g.textAlign = "center";
+    g.font = k.act === "char" ? `600 68px ${FONT}` : `600 ${lbl.length > 3 ? 46 : 60}px ${FONT}`;
+    g.fillText(fitText(g, lbl, q.w - 20), q.x + q.w / 2, q.y + q.h / 2 + 2);
+  }
+  uploadTex(U.T, U.c, 2048, 768);
+}
+
+// ── D5: tab strip + address bar ("chrome", browser mode only) ──────────────
+const chromeUi = uiCanvas(2048, 256);
+function tabsForStrip() {
+  if (state.tabs.list.length) return state.tabs.list;
+  return [{id: state.info.tab || "1", title: state.info.title || state.info.url || "Window", url: state.info.url, loading: state.info.loading}];
+}
+function activeTabId() { return state.tabs.active != null ? state.tabs.active : (state.info.tab || "1"); }
+function chromeLayout() {                        // hit rects in canvas pixels
+  const list = tabsForStrip(), items = [];
+  const tw = Math.min(330, (2048 - 120 - 360) / Math.max(1, list.length));
+  list.forEach((t, i) => {
+    const x = i * tw;
+    items.push({kind: "tab", id: t.id, x, y: 0, w: tw - 56, h: 120, t});
+    items.push({kind: "close", id: t.id, x: x + tw - 56, y: 0, w: 56, h: 120});
+  });
+  items.push({kind: "new", x: list.length * tw, y: 0, w: 120, h: 120});
+  items.push({kind: "back", x: 0, y: 128, w: 120, h: 128});
+  items.push({kind: "fwd", x: 120, y: 128, w: 120, h: 128});
+  items.push({kind: "reload", x: 240, y: 128, w: 120, h: 128});
+  items.push({kind: "url", x: 370, y: 128, w: 2048 - 370 - 140, h: 128});
+  items.push({kind: "kbd", x: 2048 - 130, y: 128, w: 130, h: 128});
+  return {items, tw};
+}
+function chromeQuad() {
+  const P = panelParams();
+  return {M: I3, c: [0, P.y + P.h / 2 + 0.04 + 0.15, -P.d], w: 2.4, h: 0.30};
+}
+const chromeVisible = () => state.mode === "browser" && state.cinemaT <= 0.01 && state.panelA > 0.5;
+function chromeItemAt(u, v) {
+  const px = u * 2048, py = v * 256;
+  for (const it of chromeLayout().items) if (px >= it.x && px < it.x + it.w && py >= it.y && py < it.y + it.h) return it;
+  return null;
+}
+function chromeClick(it) {
+  if (!it) return;
+  const list = tabsForStrip();
+  switch (it.kind) {
+    case "tab": if (it.id !== activeTabId()) send({t: "tab", action: "switch", id: it.id}); break;
+    case "close": send({t: "tab", action: "close", id: it.id}); hudShow({title: "Window closed", text: ""}, 1500); break;
+    case "new": newWindow(); break;
+    case "back": if (state.info.canBack) send({t: "nav", to: "back"}); break;
+    case "fwd": send({t: "nav", to: "forward"}); break;
+    case "reload": send({t: "nav", to: "reload"}); break;
+    case "url": case "kbd": kbOpen("address"); break;
+  }
+  clickFlash = performance.now();
+  void list;
+}
+function chromeDraw(now) {
+  const U = chromeUi, g = U.g;
+  const list = tabsForStrip(), act = activeTabId(), hit = state.ptrTarget === "chrome" ? state.chromeHit : null;
+  const hk = hit ? hit.kind + ":" + (hit.id || "") : "";
+  const key = JSON.stringify([list, act, state.tabs.max, activeUrl(), state.info.canBack, hk, padSource().text,
+                              list.some((t) => t.loading) ? Math.floor(now / 400) % 2 : 0]);
+  if (key === U.key) return;
+  U.key = key;
+  const L = chromeLayout();
+  g.fillStyle = "#0b0e16"; g.fillRect(0, 0, 2048, 256);
+  const isHit = (kind, id) => hit && hit.kind === kind && (id == null || hit.id === id);
+  g.textBaseline = "middle";
+  // row 1: tabs
+  list.forEach((t, i) => {
+    const x = i * L.tw, on = t.id === act;
+    g.fillStyle = on ? "#2f81f7" : isHit("tab", t.id) ? "#2a3550" : "#1a2030";
+    rr(g, x + 4, 8, L.tw - 8, 108, 18); g.fill();
+    let tx = x + 24;
+    if (t.loading) { g.fillStyle = Math.floor(now / 400) % 2 ? "#ffd166" : "#b08a2e"; g.beginPath(); g.arc(x + 30, 62, 9, 0, 7); g.fill(); tx = x + 50; }
+    g.fillStyle = "#f2f5fa"; g.font = `600 44px ${FONT}`; g.textAlign = "left";
+    const title = t.url === "about:blank" ? "New window" : (t.title || t.url || "Window");
+    g.fillText(fitText(g, title, L.tw - (tx - x) - 64), tx, 64);
+    g.fillStyle = isHit("close", t.id) ? "#ff8c8c" : on ? "#e8f0ff" : "#8f9bb0";
+    g.font = `600 46px ${FONT}`; g.textAlign = "center";
+    g.fillText("×", x + L.tw - 32, 62);
+  });
+  const nx = list.length * L.tw, full = list.length >= (state.tabs.max || 6);
+  g.fillStyle = full ? "#141821" : isHit("new") ? "#2a3550" : "#1a2030";
+  rr(g, nx + 4, 8, 112, 108, 18); g.fill();
+  g.fillStyle = full ? "#4a5263" : "#f2f5fa"; g.font = `600 72px ${FONT}`; g.textAlign = "center";
+  g.fillText("+", nx + 60, 64);
+  drawBadge(g, 2048 - 16, 62, 360, 34);
+  // row 2: back / forward / reload, URL field, keyboard
+  const btn = (kind, label, x, w, enabled) => {
+    g.fillStyle = isHit(kind) ? "#2a3550" : "#161b27"; rr(g, x + 4, 136, w - 8, 112, 18); g.fill();
+    g.fillStyle = enabled ? "#f2f5fa" : "#4a5263"; g.font = `600 58px ${FONT}`; g.textAlign = "center";
+    g.fillText(label, x + w / 2, 194);
+  };
+  btn("back", "◀", 0, 120, state.info.canBack); btn("fwd", "▶", 120, 120, true); btn("reload", "⟳", 240, 120, true);
+  const uw = 2048 - 370 - 140;
+  g.fillStyle = isHit("url") ? "#222b3f" : "#161b27"; rr(g, 374, 136, uw - 8, 112, 18); g.fill();
+  g.strokeStyle = isHit("url") ? "#2f81f7" : "#2a3346"; g.lineWidth = 4; g.stroke();
+  const url = activeUrl(), shownUrl = url === "about:blank" ? "" : url.replace(/^https:\/\//, "");
+  g.textAlign = "left"; g.font = `48px ${FONT}`;
+  g.fillStyle = shownUrl ? "#dfe6f2" : "#6b768a";
+  g.fillText(fitText(g, shownUrl || "Type an address or search", uw - 60), 400, 194);
+  btn("kbd", "⌨", 2048 - 130, 130, true);
+  uploadTex(U.T, U.c, 2048, 256);
+}
+
+// ── D3: VR player bar ───────────────────────────────────────────────────────
+const barUi = uiCanvas(2048, 320);
+const BAR_BTNS = [["back", 250], ["rew", 120], ["play", 120], ["fwd", 120], ["seek", 500], ["proj", 340], ["stereo", 110],
+                  ["smaller", 90], ["bigger", 90], ["recenter", 100], ["kbd", 100]];
+const BAR_RECTS = (() => { let x = 4; return BAR_BTNS.map(([id, w]) => { const r = {id, x, y: 100, w, h: 212}; x += w + 8; return r; }); })();
+const bar = {until: 0, a: 0, yaw: 0, hi: -1, hiSrc: "", hiAt: 0, gazeAtPad: -1, gazeBtn: -1, gazeU: 0, userHidden: false, onBar: false};
+function barShow(ms) {
+  if (state.mode !== "vr") return;
+  const now = performance.now();
+  if (!barVisible()) bar.yaw = isCinema(state.proj) ? 0 : headYawOf(currentRotation());
+  bar.userHidden = false;
+  bar.until = Math.max(bar.until, now + (ms || 4000));
+}
+function barVisible() {
+  if (state.mode !== "vr" || bar.userHidden) return false;
+  const now = performance.now();
+  return now < bar.until || isPaused() || (bar.onBar && bar.a > 0.5) || (bar.hiSrc === "pad" && bar.hi >= 0 && now - bar.hiAt < 4000);
+}
+function barQuad() { return quadAt(bar.yaw, -22 * deg, 2.0, 1.8, 0.28); }
+function barEnabled(id) { return !((id === "smaller" || id === "bigger") && !isCinema(state.proj)); }
+function barMove(d) {
+  const n = BAR_RECTS.length;
+  let i = bar.hi < 0 ? (d > 0 ? 0 : n - 1) : (bar.hi + d + n) % n;
+  bar.hi = i; bar.hiSrc = "pad"; bar.hiAt = performance.now(); bar.gazeAtPad = bar.gazeBtn;
+  barShow(4000);
+}
+function barGaze(btn, u) {
+  bar.gazeBtn = btn; bar.gazeU = u;
+  const now = performance.now();
+  if (btn >= 0) {
+    if (bar.hiSrc === "pad" && btn === bar.gazeAtPad && now - bar.hiAt < 4000) return;   // the pad highlight stays
+    bar.hi = btn; bar.hiSrc = "gaze";
+  } else {
+    if (bar.hiSrc === "gaze") { bar.hi = -1; bar.hiSrc = ""; }
+    else if (bar.hiSrc === "pad" && (now - bar.hiAt > 4000 || (bar.onBar && bar.gazeAtPad !== btn))) { bar.hi = -1; bar.hiSrc = ""; }
+  }
+}
+function barAction(i) {
+  const r = BAR_RECTS[i]; if (!r) return;
+  barShow(4000);
+  switch (r.id) {
+    case "back": exitVr(); break;
+    case "rew": seek(-10); break;
+    case "fwd": seek(10); break;
+    case "play": togglePlay(); break;
+    case "seek": {
+      if (bar.hiSrc !== "gaze") { hudShow({title: "Look at the bar to jump", text: "or d-pad left / right = 10 s"}, 2000); break; }
+      const f = clamp((bar.gazeU * 2048 - r.x - 10) / (r.w - 20), 0, 1), d = mediaDuration();
+      if (isFinite(d) && d > 0) { seekTo(f * d); hudShow({title: fmtT(f * d), text: timeText()}, 1500); }
+      break;
+    }
+    case "proj": cycleProjection(); break;
+    case "stereo": {
+      const st = projStereo(state.proj);
+      if (st !== "mono") { state.force2D = !state.force2D; hudShow({title: state.force2D ? "2D (one eye's picture)" : "3D", text: ""}, 1500); }
+      else {
+        const fam = PROJ[state.proj].fam, to = {flat: "flat_sbs", equirect: "equirect_tb", half: "half_sbs"}[fam];
+        if (to) userProjection(to);
+      }
+      break;
+    }
+    case "smaller": case "bigger":
+      if (!barEnabled(r.id)) break;
+      setUserSpan(cinemaSpan() / deg + (r.id === "bigger" ? 10 : -10));
+      hudShow({title: "Screen " + Math.round(cinemaSpan() / deg) + "°", text: ""}, 1200);
+      break;
+    case "recenter": recenter(); break;
+    case "kbd": kbToggle(); break;
+  }
+  clickFlash = performance.now();
+}
+function barDraw(now) {
+  const U = barUi, g = U.g;
+  const d = mediaDuration(), t = demoVideoSrc ? 0 : mediaTime(), paused = isPaused();
+  let buf = "";
+  try { const b = video.buffered; for (let i = 0; i < b.length; i++) buf += Math.round(b.start(i)) + "-" + Math.round(b.end(i)) + ","; } catch (_) {}
+  const st = projStereo(state.proj);
+  const key = [state.videoTitle, Math.floor(t), Math.round(d), buf, paused, state.proj, state.force2D, bar.hi, padSource().text,
+               st, Math.round(cinemaSpan() / deg), clickFlash > now - 150].join("|");
+  if (key === U.key) return;
+  U.key = key;
+  g.fillStyle = "#0b0e16"; g.fillRect(0, 0, 2048, 320);
+  g.strokeStyle = "#33405a"; g.lineWidth = 6; g.strokeRect(3, 3, 2042, 314);
+  g.textBaseline = "middle";
+  g.fillStyle = "#f2f5fa"; g.font = `600 46px ${FONT}`; g.textAlign = "left";
+  g.fillText(fitText(g, state.videoTitle || "Video", 760), 24, 50);
+  g.textAlign = "center"; g.font = `600 46px ${FONT}`; g.fillStyle = "#dfe6f2";
+  g.fillText(fmtT(t) + " / " + fmtT(d), 1024, 50);
+  drawBadge(g, 2048 - 24, 50, 640, 34);
+  BAR_RECTS.forEach((r, i) => {
+    const hi = bar.hi === i, en = barEnabled(r.id);
+    g.fillStyle = hi ? "#2f81f7" : "#1a2030";
+    rr(g, r.x, r.y, r.w, r.h, 20); g.fill();
+    g.fillStyle = en ? "#f2f5fa" : "#4a5263"; g.textAlign = "center";
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    let label = "";
+    switch (r.id) {
+      case "back": label = "◀ Browser"; break;
+      case "rew": label = "−10"; break;
+      case "play": label = paused ? "▶" : "❚❚"; break;
+      case "fwd": label = "+10"; break;
+      case "proj": label = projLabel(state.proj) + " ▸"; break;
+      case "stereo": label = st !== "mono" && !state.force2D ? "3D" : "2D"; break;
+      case "smaller": label = "−"; break;
+      case "bigger": label = "+"; break;
+      case "recenter": label = "⌖"; break;
+      case "kbd": label = "⌨"; break;
+    }
+    if (r.id === "seek") {
+      const x0 = r.x + 10, w = r.w - 20, y = cy - 14;
+      g.fillStyle = "#26304a"; g.fillRect(x0, y, w, 28);
+      if (isFinite(d) && d > 0) {
+        g.fillStyle = "#56607a";
+        try { const b = video.buffered; for (let k = 0; k < b.length; k++) g.fillRect(x0 + w * b.start(k) / d, y, w * (b.end(k) - b.start(k)) / d, 28); } catch (_) {}
+        g.fillStyle = hi ? "#ffffff" : "#2f81f7"; g.fillRect(x0, y, w * clamp(t / d, 0, 1), 28);
+      }
+      return;
+    }
+    const px = r.id === "proj" ? 46 : r.id === "back" ? 46 : (r.id === "rew" || r.id === "fwd") ? 54 : 64;
+    g.font = `600 ${px}px ${FONT}`;
+    g.fillText(fitText(g, label, r.w - 16), cx, cy + 2);
+  });
+  uploadTex(U.T, U.c, 2048, 320);
+}
+
+// ── D5: windows from the controller ─────────────────────────────────────────
+function newWindow() {
+  const list = state.tabs.list;
+  if (list.length >= (state.tabs.max || 6)) { hudShow({title: "Up to " + (state.tabs.max || 6) + " windows: close one first", text: ""}, 3000); return; }
+  send({t: "tab", action: "new"});
+  pendingNewTab = performance.now();
+  kbOpen("address", {buf: ""});
+}
+function switchWindow(d) {
+  const list = state.tabs.list;
+  if (list.length <= 1) { hudShow({title: "Only one window", text: "R3 = new window"}, 2000); return; }
+  const i = Math.max(0, list.findIndex((t) => t.id === state.tabs.active));
+  const t = list[(i + d + list.length) % list.length];
+  send({t: "tab", action: "switch", id: t.id});
+  hudShow({title: t.url === "about:blank" ? "New window" : (t.title || t.url), text: "Window " + ((i + d + list.length) % list.length + 1) + " of " + list.length}, 1500);
+}
+function closeWindow() {
+  send({t: "tab", action: "close"});
+  hudShow({title: "Window closed", text: ""}, 2000);
+}
+
+// ── Pointer (gaze ray + right-stick nudge): keyboard > tab strip > player bar > page ──
+let ptrSentAt = 0, ptrSent = null, clickFlash = 0;
+function rayDir(R) {
+  const cy = state.curYaw, cp = state.curPitch;
+  return mv3(R, [Math.sin(cy) * Math.cos(cp), Math.sin(cp), -Math.cos(cy) * Math.cos(cp)]);
+}
+function pageScreen() { return state.mode === "vr" ? null : panelParams(); }   // the surface showing the live page
+function barBtnAt(u, v) {
+  const px = u * 2048, py = v * 320;
+  return BAR_RECTS.findIndex((r) => px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h);
+}
+function updatePointer(R) {
+  const dir = rayDir(R), o = [0, 0, 0];
+  state.ptrTarget = null; state.ptrHit = null; state.chromeHit = null;
+  bar.onBar = false;
+  let barBtn = -1, barU = 0;
+  if (kb.open) {
+    const h = hitQuad(kbQuad(), o, dir);
+    if (h) { state.ptrTarget = "kbd"; state.ptrHit = {p: h.p, t: h.t}; kbGaze(h, dir); }
+  }
+  if (!state.ptrTarget && chromeVisible()) {
+    const h = hitQuad(chromeQuad(), o, dir);
+    if (h) { state.ptrTarget = "chrome"; state.ptrHit = {p: h.p, t: h.t}; state.chromeHit = chromeItemAt(h.u, h.v); }
+  }
+  if (!state.ptrTarget && state.mode === "vr" && bar.a > 0.5) {
+    const h = hitQuad(barQuad(), o, dir);
+    if (h) { state.ptrTarget = "bar"; state.ptrHit = {p: h.p, t: h.t}; bar.onBar = true; barBtn = barBtnAt(h.u, h.v); barU = h.u; }
+  }
+  if (state.mode === "vr") barGaze(barBtn, barU);
+  if (state.ptrTarget) { state.ptr = null; return; }
+  const P = pageScreen();
+  if (!P || state.panelA < 0.5) { state.ptr = null; return; }
+  const h = hitScreen(P, o, dir);
+  if (!h || h.u < 0 || h.u > 1 || h.v < 0 || h.v > 1) { state.ptr = null; return; }
+  state.ptrTarget = "page";
+  state.ptr = {x: h.u, y: h.v};
+  state.ptrHit = {p: [dir[0] * h.t, dir[1] * h.t, dir[2] * h.t], t: h.t};
+  const now = performance.now();
+  if (now - ptrSentAt >= 33 && (!ptrSent || Math.abs(ptrSent.x - h.u) + Math.abs(ptrSent.y - h.v) > 0.0006)) {
+    ptrSentAt = now; ptrSent = {x: h.u, y: h.v};
+    send({t: "ptr", x: +h.u.toFixed(4), y: +h.v.toFixed(4)});
+  }
+}
+function click() {
+  if (!state.ptr) { hint("Point at the page first", 1500); return; }
+  send({t: "click", x: +state.ptr.x.toFixed(4), y: +state.ptr.y.toFixed(4), button: "left"});
+  clickFlash = performance.now();
+}
+function pressA() {                              // A-to-click in every mode (the keyboard handles its own A first)
+  if (state.mode === "vr") { if (barVisible() && bar.hi >= 0) barAction(bar.hi); else togglePlay(); return; }
+  if (resolving) { hudShow({title: hud3.title || "Video", text: "Getting the video ready…  B = cancel"}, 3000); return; }
+  if (state.ptrTarget === "chrome") { chromeClick(state.chromeHit); return; }
+  click();
+}
+function scrollBy(dy) {
+  const p = state.ptr || {x: 0.5, y: 0.5};
+  send({t: "scroll", x: +p.x.toFixed(4), y: +p.y.toFixed(4), dy: Math.round(dy)});
+}
+let scrollAcc = 0, scrollSentAt = 0;
+const nav = (to) => send({t: "nav", to});
+const key = (k) => send({t: "key", key: k});
+
+// ── D1: controller input (laptop pad relayed + phone Gamepad API + test hook) ──
+// Bits (Godot order): 0 A, 1 B, 2 X, 3 Y, 4 View, 6 Start, 7 L3, 8 R3, 9 LB, 10 RB, 11 up, 12 down, 13 left, 14 right,
+// plus virtual 15 LT, 16 RT from the analog triggers (pressed > 0.6, released < 0.3).
+const STD_TO_BIT = {0: 0, 1: 1, 2: 2, 3: 3, 8: 4, 9: 6, 10: 7, 11: 8, 4: 9, 5: 10, 12: 11, 13: 12, 14: 13, 15: 14};
+const DEAD = 0.18;
+const dz = (v) => Math.abs(v) < DEAD ? 0 : (v - Math.sign(v) * DEAD) / (1 - DEAD);
+const bigger = (a, b) => Math.abs(a) >= Math.abs(b) ? a : b;
+let prevBits = 0;
+const holdSince = {}, holdRepeat = {}, trig = {l: false, r: false}, stick = {dir: 0, since: 0, rep: 0};
+let r3 = null;                                   // R3 press in browser mode: {warned, done}
+function readPads() {
+  const out = {bits: 0, lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0};
+  const names = [];
+  if (laptopPad && performance.now() - laptopPadAt < 1500) {
+    names.push("laptop");
+    out.bits |= laptopPad.bits;
+  }
+  if (padLatch) { out.bits |= padLatch; padLatch = 0; }
+  if (laptopPad && performance.now() - laptopPadAt < 1500) {
+    out.lx = laptopPad.lx; out.ly = laptopPad.ly; out.rx = laptopPad.rx; out.ry = laptopPad.ry;
+    out.lt = laptopPad.lt; out.rt = laptopPad.rt;
+  }
+  phonePadId = "";
+  if (navigator.getGamepads) {
+    let pads = [];
+    try { pads = navigator.getGamepads() || []; } catch (_) {}
+    for (const p of pads) {
+      if (!p || !p.connected) continue;
+      phonePadId = p.id || "gamepad"; names.push(p.id.slice(0, 30));
+      p.buttons.forEach((b, i) => { if (b && b.pressed && STD_TO_BIT[i] !== undefined) out.bits |= 1 << STD_TO_BIT[i]; });
+      const ax = p.axes;
+      out.lx = bigger(out.lx, ax[0] || 0); out.ly = bigger(out.ly, ax[1] || 0);
+      out.rx = bigger(out.rx, ax[2] || 0); out.ry = bigger(out.ry, ax[3] || 0);
+      out.lt = Math.max(out.lt, p.buttons[6] ? p.buttons[6].value : 0);
+      out.rt = Math.max(out.rt, p.buttons[7] ? p.buttons[7].value : 0);
+      break;
+    }
+  }
+  const tp = window.__vrbTestPad;               // test hook: {bits, lx, ly, rx, ry, lt, rt} injected by an automated test
+  testPadOn = !!tp;
+  if (tp) {
+    names.push("test");
+    out.bits |= (tp.bits || 0) | (tp.latch || 0);
+    tp.latch = 0;                                 // test hook: one-frame tap, like the laptop latch
+    out.lx = bigger(out.lx, tp.lx || 0); out.ly = bigger(out.ly, tp.ly || 0);
+    out.rx = bigger(out.rx, tp.rx || 0); out.ry = bigger(out.ry, tp.ry || 0);
+    out.lt = Math.max(out.lt, tp.lt || 0); out.rt = Math.max(out.rt, tp.rt || 0);
+  }
+  if (!trig.l && out.lt > 0.6) trig.l = true; else if (trig.l && out.lt < 0.3) trig.l = false;
+  if (!trig.r && out.rt > 0.6) trig.r = true; else if (trig.r && out.rt < 0.3) trig.r = false;
+  if (trig.l) out.bits |= 1 << 15;
+  if (trig.r) out.bits |= 1 << 16;
+  state.gamepad = names.join(" + ");
+  out.lx = dz(out.lx); out.ly = dz(out.ly); out.rx = dz(out.rx); out.ry = dz(out.ry);
+  return out;
+}
+function uiActivity(b) {                         // every input wakes the UI (D1)
+  if (state.mode === "vr" && b !== 2 && !kb.open) barShow(4000);
+}
+function closeLens() { lensPanel.hidden = true; crossL.hidden = true; crossR.hidden = true; }
+function onButton(b) {
+  if (!lensPanel.hidden) {                       // lens tuning with the headset on; A, B or View closes it
+    if (b === 14) { setLens({doffset: 0.005}); return; }
+    if (b === 13) { setLens({doffset: -0.005}); return; }
+    if (b === 11) { setLens({dfov: 2}); return; }
+    if (b === 12) { setLens({dfov: -2}); return; }
+    if (b === 0 || b === 1 || b === 4) { closeLens(); return; }
+  }
+  if (b === 4) { toggleLensPanel(); return; }
+  if (b === 7) { kbToggle(); return; }           // L3: keyboard on / off, in every mode
+  if (kb.open && kbButton(b)) return;
+  if (b === 6) { recenter(); return; }
+  if (state.mode === "vr") {
+    switch (b) {
+      case 0: pressA(); break;
+      case 1: exitVr(); break;
+      case 2:
+        if (barVisible()) { bar.userHidden = true; bar.until = 0; bar.hi = -1; bar.hiSrc = ""; }
+        else barShow(4000);
+        break;
+      case 3: cycleProjection(); break;
+      case 9: barMove(-1); break;
+      case 10: barMove(1); break;
+      case 13: seek(-10); break;
+      case 14: seek(10); break;
+    }
+    return;
+  }
+  if (state.mode === "screen" && (b === 8 || b === 15 || b === 16)) {
+    hudShow({title: "Go back to the browser first (B)", text: ""}, 2500); return;
+  }
+  switch (b) {                                   // browser (and live "screen") mode
+    case 0: pressA(); break;
+    case 1:
+      if (state.mode === "screen") exitVr();
+      else if (resolving) {                      // cancel the video that is getting ready, stay on this page
+        send({t: "vr", action: "exit"}); resolving = false;
+        hudShow({title: "Cancelled", text: ""}, 1500);
+      } else nav("back");
+      break;
+    case 2: send({t: "vr", action: "enter"}); hudShow({title: "Play in VR", text: "Looking for a video on this page…"}, 4000); break;
+    case 3: nav("reload"); hint("Reload", 1000); break;
+    case 8: r3 = {warned: false, done: false}; break;   // tap = new window, hold = close (onButtonHeld / Up)
+    case 9: nav("back"); break;
+    case 10: nav("forward"); break;
+    case 13: key("ArrowLeft"); break;
+    case 14: key("ArrowRight"); break;
+    case 11: scrollBy(-260); break;
+    case 12: scrollBy(260); break;
+    case 15: switchWindow(-1); break;
+    case 16: switchWindow(1); break;
+  }
+}
+function onButtonHeld(b, held, now) {
+  if (b === 8 && r3 && !r3.done && state.mode === "browser") {
+    if (held >= 300 && !r3.warned) { r3.warned = true; hudShow({title: "Hold to close the window…", text: ""}, 900); }
+    if (held >= 800) { r3.done = true; closeWindow(); }
+    return;
+  }
+  if (held < 400) return;
+  if (kb.open && lensPanel.hidden && (b === 2 || (b >= 11 && b <= 14))) {
+    if (now - holdRepeat[b] >= 80) { holdRepeat[b] = now; if (b === 2) kbBackspace(); else kbMove(b); }
+    return;
+  }
+  if ((b === 11 || b === 12) && state.mode !== "vr" && lensPanel.hidden && !kb.open && now - holdRepeat[b] > 110) {
+    holdRepeat[b] = now; scrollBy(b === 11 ? -200 : 200);   // held d-pad up/down keeps scrolling
+  }
+}
+function onButtonUp(b, held) {
+  if (b === 8) {
+    const r = r3; r3 = null;
+    if (r && !r.done && held < 800 && state.mode === "browser") { if (r.warned) hudHide(); newWindow(); }
+  }
+}
+function pollPads(dt) {
+  const p = readPads();
+  const now = performance.now();
+  for (let b = 0; b <= 16; b++) {
+    const on = (p.bits >> b) & 1, was = (prevBits >> b) & 1;
+    if (on && !was) { holdSince[b] = now; holdRepeat[b] = now; uiActivity(b); onButton(b); }
+    else if (!on && was) { onButtonUp(b, now - (holdSince[b] || now)); }
+    else if (on && was) onButtonHeld(b, now - holdSince[b], now);
+  }
+  prevBits = p.bits;
+  // the left stick wakes the player bar (unless X hid it); turning with the right stick never does
+  if ((p.lx || p.ly) && !bar.userHidden) uiActivity(-1);
+  if (kb.open) {
+    // left stick moves the key highlight (repeat 400 ms / 80 ms); right stick nudges the pointer
+    let dir = 0;
+    if (Math.abs(p.lx) > 0.5 || Math.abs(p.ly) > 0.5) dir = Math.abs(p.lx) > Math.abs(p.ly) ? (p.lx > 0 ? 14 : 13) : (p.ly > 0 ? 12 : 11);
+    if (dir !== stick.dir) { stick.dir = dir; stick.since = now; stick.rep = now; if (dir) kbMove(dir); }
+    else if (dir && now - stick.since > 400 && now - stick.rep >= 80) { stick.rep = now; kbMove(dir); }
+    state.curYaw = clamp(state.curYaw + p.rx * 1.1 * dt, -0.6, 0.6);
+    state.curPitch = clamp(state.curPitch - p.ry * 1.1 * dt, -0.5, 0.5);
+    return;
+  }
+  stick.dir = 0;
+  if (state.mode === "vr") {
+    state.bodyYaw -= p.rx * 1.8 * dt;                         // right stick turns (360 videos / no-gyro phones)
+    if (isCinema(state.proj) && p.ly) setUserSpan(cinemaSpan() / deg - p.ly * 52 * dt);   // ~52°/s
+  } else {
+    // right stick nudges the pointer away from the gaze centre (point without craning)
+    state.curYaw = clamp(state.curYaw + p.rx * 1.1 * dt, -0.6, 0.6);
+    state.curPitch = clamp(state.curPitch - p.ry * 1.1 * dt, -0.5, 0.5);
+    if (p.ly) {                                              // left stick scrolls (down = page down)
+      scrollAcc += p.ly * Math.abs(p.ly) * 1600 * dt;
+      if (now - scrollSentAt > 50 && Math.abs(scrollAcc) >= 1) { scrollSentAt = now; scrollBy(scrollAcc); scrollAcc = 0; }
+    } else scrollAcc = 0;
+  }
+}
+
+// ── Touch: drag turns, single tap = click / play-pause (+ player bar), double tap = recenter ──
+let drag = null, lastTap = 0, tapTimer = null, pointersDown = 0, multiTouch = false;
+canvas.addEventListener("pointerdown", (e) => {
+  pointersDown++; if (pointersDown > 1) multiTouch = true;
+  drag = {x: e.clientX, moved: 0};
+  try { canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); } catch (_) {}
+});
+canvas.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x; drag.x = e.clientX; drag.moved += Math.abs(dx);
+  const span = state.stereo ? innerWidth / 2 : innerWidth;
+  state.bodyYaw += dx / span * Math.PI * 0.75;
+});
+function endPointer(cancel) {
+  pointersDown = Math.max(0, pointersDown - 1);
+  const wasDrag = drag && drag.moved > 12; drag = null;
+  const multi = multiTouch;
+  if (pointersDown === 0) multiTouch = false;
+  if (cancel || wasDrag || multi) { lastTap = 0; return; }
+  if (needTap) { playVideo(); hudHide(); lastTap = 0; return; }   // must run inside the gesture (iOS)
+  const now = performance.now();
+  if (now - lastTap > 40 && now - lastTap < 320) { clearTimeout(tapTimer); recenter(); lastTap = 0; return; }
+  lastTap = now;
+  tapTimer = setTimeout(() => {
+    showHud(4000);
+    if (kb.open) kbPressHi();
+    else if (state.mode === "vr") { togglePlay(); barShow(4000); }
+    else if (state.ptrTarget === "chrome") chromeClick(state.chromeHit);
+    else if (state.ptr) click();
+  }, 330);
+}
+canvas.addEventListener("pointerup", () => endPointer(false));
+canvas.addEventListener("pointercancel", () => endPointer(true));
+
+document.getElementById("btnRecenter").addEventListener("click", () => recenter());
+btnMode.addEventListener("click", () => setStereo(!state.stereo));
+function syncLensUi() {
+  offRange.value = lens.offset; fovRange.value = lens.fov;
+  document.getElementById("offVal").textContent = lens.offset.toFixed(3);
+  document.getElementById("fovVal").textContent = lens.fov + "°";
+}
+function toggleLensPanel() {
+  lensPanel.hidden = !lensPanel.hidden; syncLensUi();
+  if (!lensPanel.hidden) { showCrosses(0); showHud(6000); } else { crossL.hidden = true; crossR.hidden = true; }
+}
+document.getElementById("btnLens").addEventListener("click", toggleLensPanel);
+offRange.addEventListener("input", () => setLens({offset: parseFloat(offRange.value)}, false));
+fovRange.addEventListener("input", () => setLens({fov: parseFloat(fovRange.value)}, false));
+document.getElementById("lensReset").addEventListener("click", () => setLens({reset: true}, false));
+document.getElementById("lensClose").addEventListener("click", closeLens);
+function setStereo(on) {
+  state.stereo = on;
+  document.getElementById("divider").hidden = !on;
+  btnMode.textContent = on ? "Mono" : "Stereo";
+  layoutHud(); showHud(3000);
+  scheduleHello();
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function resize() {
+  const dpr = DPR_OVERRIDE || Math.min(window.devicePixelRatio || 1, state.stereo ? 3 : 2);   // B3
+  curDpr = dpr;
+  const w = Math.round((canvas.clientWidth || innerWidth) * dpr), h = Math.round((canvas.clientHeight || innerHeight) * dpr);
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w; canvas.height = h;
+    scheduleHello();
+  }
+}
+function currentRotation() {
+  const H = state.H || rotX(fixedPitch);
+  return mul3(rotY(state.bodyYaw + state.yawOffset), H);
+}
+function drawMesh(mesh, model) {
+  gl.uniformMatrix4fv(U.uModel, false, model);
+  gl.bindVertexArray(mesh.vao);
+  if (mesh.indexed) gl.drawElements(mesh.prim, mesh.count, mesh.itype, 0);
+  else gl.drawArrays(mesh.prim, 0, mesh.count);
+}
+function setScreen(P) {
+  gl.uniform1i(U.uGeo, 1);
+  gl.uniform4f(U.uScr, P.d, P.w, P.h, P.k);
+  gl.uniform1f(U.uScrY, P.y);
+}
+function bindTex(T) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, T.tex); }
+function drawUiQuad(T, Q, alpha) {
+  bindTex(T);
+  gl.uniform1i(U.uMode, 0); gl.uniform1i(U.uProj, 0); gl.uniform1i(U.uGeo, 0);
+  gl.uniform1i(U.uSharp, SHARP ? 1 : 0); gl.uniform1f(U.uAlpha, alpha);
+  drawMesh(QUAD, quadModel(Q));
+  gl.uniform1i(U.uSharp, 0);
+}
+const SPHERE_MODEL = modelRS(I3, [30, 30, 30], [0, 0, 0]);
+function drawVideo(eye, VP, VProt) {
+  const P0 = PROJ[state.proj];
+  bindTex(videoTex);
+  gl.uniform1i(U.uMode, 0); gl.uniform1f(U.uAlpha, state.videoA);
+  if (P0.fam === "mesh") {                       // B6: the video's own projection mesh
+    if (!meshGL) return;
+    gl.uniformMatrix4fv(U.uVP, false, VProt);
+    const st = projStereo("mesh"), e = state.force2D ? 0 : eye;
+    let t = [1, 0, -1, 1];
+    if (st === "sbs") t = [0.5, e ? 0.5 : 0, -1, 1];
+    else if (st === "tb") t = [1, 0, -0.5, e ? 1 : 0.5];
+    gl.uniform4f(U.uUVT, t[0], t[1], t[2], t[3]);
+    for (const it of meshGL.list) if (it.eye === null || it.eye === e) drawMesh(it.mesh, SPHERE_MODEL);
+    gl.uniform4f(U.uUVT, 1, 0, 1, 0);
+  } else if (P0.up > 0) {                        // B5: sphere sampled per fragment
+    gl.uniformMatrix4fv(U.uVP, false, VProt);
+    const w = eyeWindow(state.proj, eye);
+    gl.uniform1i(U.uProj, P0.up);
+    gl.uniform4f(U.uWin, w[0], w[1], w[2], w[3]);
+    gl.uniform2f(U.uTexel, 1 / Math.max(1, videoTex.w), 1 / Math.max(1, videoTex.h));
+    drawMesh(SPHERE, SPHERE_MODEL);
+    gl.uniform1i(U.uProj, 0);
+  } else {                                       // cinema screen (flat / flat_sbs / flat_tb)
+    gl.uniformMatrix4fv(U.uVP, false, VP);
+    const C = cinemaParams(screenAspect(state.proj)), w = eyeWindow(state.proj, eye);
+    gl.uniform1i(U.uMode, 1); gl.uniform4f(U.uColor, 0.07, 0.08, 0.1, 1);      // thin dark frame
+    setScreen({d: C.d + 0.01, w: C.w + 0.08, h: C.h + 0.08, k: C.k, y: C.y}); drawMesh(GRID, IDENT);
+    gl.uniform1i(U.uMode, 0); gl.uniform1i(U.uSharp, SHARP ? 1 : 0);
+    gl.uniform4f(U.uUVT, w[2], w[0], w[3], w[1]);
+    setScreen(C); drawMesh(GRID, IDENT);
+    gl.uniform4f(U.uUVT, 1, 0, 1, 0); gl.uniform1i(U.uSharp, 0);
+  }
+  gl.uniform1i(U.uGeo, 0);
+}
+function drawEye(R, eye, eyeOffset, x, y, w, h, fovy, shiftX, now) {
+  gl.viewport(x, y, w, h); gl.scissor(x, y, w, h);
+  gl.clearColor(0, 0, 0.004, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  const e = [R[0][0] * eyeOffset, R[1][0] * eyeOffset, R[2][0] * eyeOffset];
+  const proj = perspective(fovy, w / h, 0.05, 200);
+  if (shiftX) for (let c = 0; c < 4; c++) proj[c * 4] += shiftX * proj[c * 4 + 3];
+  const VP = mul4(proj, viewMatrix(R, e));
+  const VProt = mul4(proj, viewMatrix(R, [0, 0, 0]));      // things at infinity (stars, 360 sphere)
+  gl.uniform4f(U.uUVT, 1, 0, 1, 0); gl.uniform1i(U.uGeo, 0); gl.uniform1i(U.uProj, 0); gl.uniform1i(U.uSharp, 0);
+  const vr = state.mode === "vr";
+
+  // stars
+  const sphereCover = vr && !isCinema(state.proj) ? state.videoA : 0;
+  if (sphereCover < 0.999) {
+    gl.uniformMatrix4fv(U.uVP, false, VProt);
+    gl.uniform1i(U.uMode, 3); gl.uniform1f(U.uAlpha, 1);
+    gl.uniform1f(U.uPt, Math.max(1, h / 720));            // h is in device pixels already
+    drawMesh(STARS, IDENT);
+  }
+  // video
+  if (state.videoA > 0.002 && (videoHasFrame || demoVideoSrc)) drawVideo(eye, VP, VProt);
+  gl.uniformMatrix4fv(U.uVP, false, VP);
+  // browser panel (or the live page on the cinema screen)
+  const P = panelParams();
+  if (state.panelA > 0.002) {
+    gl.uniform1f(U.uAlpha, state.panelA);
+    gl.uniform1i(U.uMode, 1); gl.uniform4f(U.uColor, 0.13, 0.15, 0.2, 1);           // bezel
+    const b = 0.025 + 0.03 * ease(state.cinemaT);
+    setScreen({d: P.d + 0.004, w: P.w + 2 * b, h: P.h + 2 * b, k: P.k, y: P.y}); drawMesh(GRID, IDENT);
+    bindTex(panelTex); gl.uniform1i(U.uMode, 0); gl.uniform1i(U.uSharp, SHARP ? 1 : 0);
+    setScreen(P); drawMesh(GRID, IDENT);
+    gl.uniform1i(U.uGeo, 0); gl.uniform1i(U.uSharp, 0);
+    if (state.info.loading && state.cinemaT < 0.01) {                               // page loading strip
+      const pulse = 0.35 + 0.35 * Math.sin(now / 180);
+      gl.uniform1i(U.uMode, 1); gl.uniform4f(U.uColor, 0.18, 0.5, 0.97, pulse);
+      drawMesh(QUAD, modelRS(I3, [P.w / 2, 0.006, 1], [0, P.y + P.h / 2 + 0.02, -P.d]));
+    }
+  }
+  // tab strip + address bar
+  if (chromeVisible()) drawUiQuad(chromeUi.T, chromeQuad(), state.panelA);
+  // VR player bar
+  if (vr && bar.a > 0.002) drawUiQuad(barUi.T, barQuad(), bar.a);
+  // HUD card
+  if (hud3.a > 0.002) {
+    bindTex(hudTex); gl.uniform1i(U.uMode, 0); gl.uniform1f(U.uAlpha, hud3.a);
+    const M = mul3(rotY(hud3.yaw), rotX(-12 * deg)), dist = 1.9;
+    const pos = mv3(M, [0, 0, -dist]);
+    drawMesh(QUAD, modelRS(M, [0.6, 0.15, 1], pos));
+  }
+  // keyboard (on top of everything but the ring)
+  if (kb.open) drawUiQuad(kbUi.T, kbQuad(), 1);
+  // pointer ring
+  if (state.ptrHit && (state.ptrTarget !== "page" || state.panelA > 0.5)) {
+    const flash = clamp(1 - (now - clickFlash) / 250, 0, 1);
+    const s = 0.016 * state.ptrHit.t * (1 + 0.5 * flash) * (state.ptrTarget === "page" ? 1 : 0.8);
+    const p = state.ptrHit.p, back = 0.02 / Math.max(state.ptrHit.t, 0.1);
+    const pos = [p[0] * (1 - back), p[1] * (1 - back), p[2] * (1 - back)];
+    gl.uniform1i(U.uMode, 2); gl.uniform1f(U.uAlpha, 1);
+    gl.uniform4f(U.uColor, flash > 0 ? 0.5 : 1, flash > 0 ? 0.8 : 1, 1, 1);
+    drawMesh(QUAD, modelRS(R, [s, s, s], pos));
+  }
+}
+const approach = (cur, target, dt, tau) => cur + (target - cur) * (1 - Math.exp(-dt / tau));
+let lastT = performance.now();
+// Test switch ?fpscap=N: draw at most N frames a second (the headless test phone renders WebGL on the CPU and
+// would otherwise starve the laptop's server and yt-dlp). Real phones never pass it.
+const FPS_CAP = parseFloat(PARAMS.get("fpscap") || "0") || 0;
+function frame(t) {
+  requestAnimationFrame(frame);
+  if (FPS_CAP && t - lastT < 1000 / FPS_CAP - 2) return;
+  const dt = Math.min(0.1, Math.max(0, (t - lastT) / 1000)); lastT = t;
+  const now = performance.now();
+  pollPads(dt);
+  const R = currentRotation();
+  updateVideoTexture();
+  // fades: panel out / video in once the first video frame is up; panel -> cinema in "screen" mode
+  const showVideo = state.mode === "vr" && (videoHasFrame || !!demoVideoSrc);
+  state.videoA = approach(state.videoA, showVideo ? 1 : 0, dt, 0.25);
+  state.panelA = approach(state.panelA, showVideo ? 0 : 1, dt, 0.2);
+  state.cinemaT = approach(state.cinemaT, state.mode === "screen" ? 1 : 0, dt, 0.3);
+  if (state.panelA > 0.995) state.panelA = 1; if (state.panelA < 0.003) state.panelA = 0;
+  if (state.videoA > 0.995) state.videoA = 1; if (state.videoA < 0.003) state.videoA = 0;
+  if (Math.abs(state.cinemaT - (state.mode === "screen" ? 1 : 0)) < 0.002) state.cinemaT = state.mode === "screen" ? 1 : 0;
+  hud3.a = approach(hud3.a, now < hud3.until ? 1 : 0, dt, 0.15);
+  bar.a = approach(bar.a, barVisible() ? 1 : 0, dt, 0.05);
+  if (bar.a < 0.003) bar.a = 0;
+  if (!state.frameSeen && !DEMO) {
+    if (!location.host) drawPlaceholder("VR Browser", "Opened without the laptop server");
+    else if (state.link === "connecting") drawPlaceholder("Connecting to the laptop…", "");
+  }
+  updatePointer(R);
+  resize();
+  badgeWatch(now);
+  if (chromeVisible()) chromeDraw(now);
+  if (state.mode === "vr" && bar.a > 0.002) barDraw(now);
+  if (kb.open) kbDraw(now);
+  const W = canvas.width, Hh = canvas.height;
+  gl.enable(gl.SCISSOR_TEST);
+  if (state.stereo) {
+    const fov = lens.fov * deg, half = Math.floor(W / 2);
+    drawEye(R, 0, -IPD / 2, 0, 0, half, Hh, fov, 2 * lens.offset, now);
+    drawEye(R, 1, IPD / 2, half, 0, W - half, Hh, fov, -2 * lens.offset, now);
+  } else {
+    drawEye(R, 0, 0, 0, 0, W, Hh, currentFovy(), 0, now);
+  }
+  state.frames++;
+}
+
+// ── 2D HUD / hints (debug, outside the headset) ────────────────────────────
+let hudTimer = null;
+function layoutHud() {
+  const [cl, cr] = eyeCentres();
+  crossL.style.left = (cl * 100) + "%"; crossR.style.left = (cr * 100) + "%";
+  if (state.stereo) { hudL.style.left = (cl * 100) + "%"; hudR.style.left = (cr * 100) + "%"; hudR.hidden = hudL.hidden; }
+  else { hudL.style.left = "50%"; hudR.hidden = true; }
+}
+function showHud(ms) {
+  hudL.hidden = false; layoutHud();
+  hudL.classList.remove("faded"); hudR.classList.remove("faded");
+  clearTimeout(hudTimer);
+  hudTimer = setTimeout(() => { hudL.classList.add("faded"); hudR.classList.add("faded"); }, ms);
+}
+let hintTimer = null;
+function hint(text, ms) {
+  hintEl.textContent = text; hintEl.classList.remove("faded");
+  clearTimeout(hintTimer); hintTimer = setTimeout(() => hintEl.classList.add("faded"), ms);
+}
+function debugLine4() {
+  const ew = state.stereo ? Math.floor(canvas.width / 2) : canvas.width;
+  let s = `eye ${ew}x${canvas.height}  ${eyePpd().toFixed(1)} px/deg  screen ${Math.round(cinemaSpan() / deg)}°`;
+  if (state.mode === "vr") {
+    const vi = state.vinfo || {};
+    s += `  video ${video.videoWidth || vi.w || state.vw}x${video.videoHeight || vi.h || state.vh} ${vi.codec || ""} (${pb.mode || vi.mode || "demo"})`;
+  }
+  return s;
+}
+setInterval(() => {
+  state.fps = state.frames; state.frames = 0;
+  sensorHz = orientEvents; orientEvents = 0;
+  const fr = state.panelFrames; state.panelFrames = 0;
+  const txt = `${state.fps} fps  ${state.stereo ? "STEREO" : "MONO"}  ${state.mode}\n` +
+              `${state.source}${sensorHz ? "  " + sensorHz + " Hz" : ""}\n` +
+              `laptop: ${state.link}  page ${fr}/s\n` + debugLine4() + "\n" + padSource().text;
+  hudL.textContent = txt; hudR.textContent = txt;
+}, 1000);
+
+// ── Start ──────────────────────────────────────────────────────────────────
+let begun = false;
+function keepAwake() { try { if (navigator.wakeLock) navigator.wakeLock.request("screen").catch(() => {}); } catch (_) {} }
+document.addEventListener("visibilitychange", () => { if (!document.hidden && begun) keepAwake(); });
+function isStandalone() {
+  return !!(navigator.standalone || (window.matchMedia && matchMedia("(display-mode: fullscreen), (display-mode: standalone)").matches));
+}
+function begin(fromTap) {
+  begun = true;
+  startEl.hidden = true;
+  document.getElementById("buttons").hidden = false;
+  setStereo(state.stereo);
+  if (fromTap) {
+    // iOS: the permission prompts MUST be requested inside the tap, before any await. The sensor
+    // choice waits for the answer (no motion events arrive while the prompt is open).
+    let permission = null;
+    if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function")
+      permission = DeviceOrientationEvent.requestPermission().catch(e => "error: " + e.message);
+    if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === "function")
+      DeviceMotionEvent.requestPermission().catch(() => {});
+    unlockVideo();
+    const el = document.documentElement;
+    const rf = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (rf) {
+      try {
+        const p = rf.call(el, {navigationUI: "hide"});
+        if (p && p.then) p.then(() => { if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(() => {}); }).catch(() => {});
+      } catch (_) {}
+    }
+    const notes = [];
+    if (!rf && !isStandalone()) notes.push("No full screen in Safari: Share > Add to Home Screen for full screen");
+    if (!navigator.wakeLock) notes.push("This browser cannot keep the screen on: set Auto-Lock to Never");
+    if (notes.length) hint(notes.join(". "), 8000);
+    keepAwake();
+    if (permission) permission.then((r) => {
+      if (r !== "granted") { state.sensorsInfo = "permission: " + r; hint("Motion permission was not granted: close the tab and reopen to be asked again", 8000); }
+      startSensors();
+    });
+    else startSensors();
+  } else {
+    state.source = "none (autostart test)";
+  }
+  if (!state.H) state.needRecenter = true;
+  showHud(5000);
+}
+document.getElementById("go").addEventListener("click", () => begin(true));
+if (!window.isSecureContext) {
+  const w = document.getElementById("secureWarn");
+  w.hidden = false;
+  w.textContent = "Not a secure (https) page: motion sensors will NOT work. Open https://" + location.hostname + ":8443/?k=...";
+}
+if (!KEY && location.host) document.getElementById("keyWarn").hidden = false;
+
+// ── Test hooks (no server): ?demo=page | flat | flat1080 | flat_sbs | flat_tb | equirect | ... | eac | screen |
+//    kbd | bar | imgtest (&layout=sbs|tb|mono &proj= &src=title|guess) ; &img=<url> uses a picture as the video ──
+function demoPage(title, url) {
+  const c = document.createElement("canvas"); c.width = 1280; c.height = 720;
+  const g = c.getContext("2d");
+  g.fillStyle = "#0f0f0f"; g.fillRect(0, 0, 1280, 720);
+  g.fillStyle = "#212121"; g.fillRect(0, 0, 1280, 56);
+  g.fillStyle = "#f00"; g.fillRect(24, 16, 34, 24);
+  g.fillStyle = "#fff"; g.font = "bold 20px Arial"; g.fillText(title || "DemoTube", 66, 36);
+  g.fillStyle = "#121212"; g.fillRect(400, 12, 480, 32); g.strokeStyle = "#333"; g.strokeRect(400, 12, 480, 32);
+  g.fillStyle = "#888"; g.font = "15px Arial"; g.fillText(url || "Search", 412, 33);
+  const hues = [10, 40, 120, 200, 260, 320, 80, 170];
+  for (let i = 0; i < 8; i++) {
+    const x = 24 + (i % 4) * 312, y = 80 + Math.floor(i / 4) * 300;
+    g.fillStyle = `hsl(${hues[i]},55%,35%)`; g.fillRect(x, y, 296, 166);
+    g.strokeStyle = "rgba(255,255,255,.6)"; g.lineWidth = 1;
+    for (let k = 0; k < 6; k++) { g.beginPath(); g.moveTo(x, y + k * 33); g.lineTo(x + 296, y + 20 + k * 33); g.stroke(); }
+    g.fillStyle = "#fff"; g.font = "bold 16px Arial"; g.fillText("Video title number " + (i + 1) + " - a long name", x, y + 192);
+    g.fillStyle = "#aaa"; g.font = "13px Arial"; g.fillText("Channel name · 1.2M views · 3 days ago", x, y + 214);
+  }
+  return c;
+}
+function demoPanorama(g, x, y, w, h, label) {
+  for (let i = 0; i < 24; i++) { g.fillStyle = `hsl(${i * 15},50%,${30 + (i % 2) * 12}%)`; g.fillRect(x + i * w / 24, y, w / 24 + 1, h); }
+  g.strokeStyle = "rgba(255,255,255,.7)"; g.lineWidth = 2;
+  for (let k = 1; k < 8; k++) { g.beginPath(); g.moveTo(x, y + k * h / 8); g.lineTo(x + w, y + k * h / 8); g.stroke(); }
+  g.fillStyle = "#fff"; g.font = `bold ${Math.round(h / 8)}px Arial`; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText(label + " FRONT", x + w / 2, y + h / 2);
+  g.fillText("BACK", x + 0.02 * w + w * 0.04, y + h / 2); g.fillText("RIGHT", x + w * 0.75, y + h / 2); g.fillText("LEFT", x + w * 0.25, y + h / 2);
+}
+function demoFlatPicture(g, x, y, w, h, label) {    // a 16:9 "movie frame" (squeezed into w x h)
+  const grd = g.createLinearGradient(x, y, x, y + h);
+  grd.addColorStop(0, "#3b6fb0"); grd.addColorStop(0.6, "#a9c6e8"); grd.addColorStop(0.61, "#4d7a3a"); grd.addColorStop(1, "#22381a");
+  g.fillStyle = grd; g.fillRect(x, y, w, h);
+  g.fillStyle = "#f5d76e"; g.beginPath(); g.ellipse(x + w * 0.8, y + h * 0.2, w * 0.05, h * 0.09, 0, 0, 7); g.fill();
+  for (let i = 0; i < 7; i++) { g.fillStyle = `hsl(${20 + i * 40},45%,40%)`; g.fillRect(x + w * (0.06 + i * 0.13), y + h * (0.38 - (i % 3) * 0.05), w * 0.09, h * (0.24 + (i % 3) * 0.05)); }
+  g.fillStyle = "#fff"; g.font = `bold ${Math.round(h / 5)}px Arial`; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText(label, x + w / 2, y + h * 0.78);
+  g.strokeStyle = "#fff"; g.lineWidth = 3; g.strokeRect(x + 2, y + 2, w - 4, h - 4);
+}
+function demoVideoCanvas(proj) {
+  const c = document.createElement("canvas"), g = c.getContext("2d");
+  const st = PROJ[proj] ? projStereoOf(proj) : "mono";
+  if (proj === "flat_sbs") { c.width = 1920; c.height = 1080; demoFlatPicture(g, 0, 0, 960, 1080, "L"); demoFlatPicture(g, 960, 0, 960, 1080, "R"); return c; }
+  if (proj === "flat_tb") { c.width = 1920; c.height = 1080; demoFlatPicture(g, 0, 0, 1920, 540, "L"); demoFlatPicture(g, 0, 540, 1920, 540, "R"); return c; }
+  if (proj === "flat") { c.width = 1920; c.height = 1080; demoFlatPicture(g, 0, 0, 1920, 1080, "FLAT"); return c; }
+  if (proj === "eac") return demoEacCanvas();
+  c.width = 2048; c.height = st === "tb" ? 2048 : 1024;
+  if (st === "tb") { demoPanorama(g, 0, 0, 2048, 1024, "L"); demoPanorama(g, 0, 1024, 2048, 1024, "R"); }
+  else if (st === "sbs") { demoPanorama(g, 0, 0, 1024, 1024, "L"); demoPanorama(g, 1024, 0, 1024, 1024, "R"); }
+  else demoPanorama(g, 0, 0, 2048, 1024, "360");
+  return c;
+}
+function projStereoOf(p) { return (PROJ[p] && PROJ[p].st) || PARAMS.get("stereo") || "mono"; }
+function demoEacCanvas() {                       // synthetic 3x2 EAC frame drawn from the face table
+  const c = document.createElement("canvas"); c.width = 1536; c.height = 1024;
+  const g = c.getContext("2d"), names = ["LEFT", "FRONT", "RIGHT", "BOTTOM", "BACK", "TOP"];
+  EAC_FACES.forEach(([col, row, rot], f) => {
+    g.save(); g.translate(col * 512 + 256, row * 512 + 256); g.rotate(-rot * Math.PI / 2);
+    g.fillStyle = `hsl(${f * 60},45%,35%)`; g.fillRect(-256, -256, 512, 512);
+    g.strokeStyle = "#fff"; g.lineWidth = 3; g.strokeRect(-250, -250, 500, 500);
+    g.fillStyle = "#fff"; g.font = "bold 64px Arial"; g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText(names[f], 0, 0); g.fillText("▲ up", 0, -170);
+    g.restore();
+  });
+  return c;
+}
+function flat1080Canvas() {                      // B8: 1920x1080 sharpness chart
+  const c = document.createElement("canvas"); c.width = 1920; c.height = 1080;
+  const g = c.getContext("2d");
+  // photo-like background: sky gradient, soft hills, sun
+  const sky = g.createLinearGradient(0, 0, 0, 1080);
+  sky.addColorStop(0, "#1d3f72"); sky.addColorStop(0.55, "#9fc1e3"); sky.addColorStop(0.56, "#557a3c"); sky.addColorStop(1, "#1f3315");
+  g.fillStyle = sky; g.fillRect(0, 0, 1920, 1080);
+  const sun = g.createRadialGradient(1600, 220, 10, 1600, 220, 220);
+  sun.addColorStop(0, "rgba(255,240,180,1)"); sun.addColorStop(1, "rgba(255,240,180,0)");
+  g.fillStyle = sun; g.fillRect(1380, 0, 440, 440);
+  // resolution wedge: a Siemens star (72 black / white spokes converging on the centre)
+  g.save(); g.translate(960, 300);
+  g.fillStyle = "#fff"; g.fillRect(-210, -210, 420, 420);
+  g.fillStyle = "#000";
+  for (let a = 0; a < 360; a += 10) {
+    g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, 200, a * deg, (a + 5) * deg); g.closePath(); g.fill();
+  }
+  g.restore();
+  // 1, 2 and 3 px line pairs (vertical and horizontal)
+  const pairs = (x0, y0, px, vertical) => {
+    g.fillStyle = "#fff"; g.fillRect(x0, y0, 160, 160); g.fillStyle = "#000";
+    for (let i = 0; i < 160; i += 2 * px) vertical ? g.fillRect(x0 + i, y0, px, 160) : g.fillRect(x0, y0 + i, 160, px);
+  };
+  [1, 2, 3].forEach((px, i) => { pairs(120 + i * 190, 120, px, true); pairs(120 + i * 190, 310, px, false); });
+  g.fillStyle = "#fff"; g.font = "bold 24px Arial"; g.textAlign = "center";
+  ["1 px", "2 px", "3 px"].forEach((t, i) => g.fillText(t, 200 + i * 190, 505));
+  // text at 12 / 16 / 24 / 32 px
+  g.textAlign = "left"; g.fillStyle = "#101010"; g.fillRect(100, 560, 1720, 250);
+  [12, 16, 24, 32].forEach((px, i) => {
+    g.fillStyle = "#fff"; g.font = `${px}px Arial`;
+    g.fillText(`${px} px: The quick brown fox jumps over the lazy dog 0123456789 - VR Browser sharpness test`, 120, 600 + i * 55);
+  });
+  // checkerboards (1 px and 4 px) and a centre cross
+  for (let y = 0; y < 120; y++) for (let x = 0; x < 120; x++) { g.fillStyle = (x + y) % 2 ? "#000" : "#fff"; g.fillRect(1480 + x, 560 + y, 1, 1); }
+  for (let y = 0; y < 30; y++) for (let x = 0; x < 30; x++) { g.fillStyle = (x + y) % 2 ? "#000" : "#fff"; g.fillRect(1640 + x * 4, 560 + y * 4, 4, 4); }
+  g.strokeStyle = "#ff3"; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(960, 520); g.lineTo(960, 560); g.moveTo(940, 540); g.lineTo(980, 540); g.stroke();
+  g.fillStyle = "#fff"; g.font = "bold 40px Arial"; g.fillText("1920 x 1080 test chart", 120, 900);
+  g.strokeStyle = "#fff"; g.lineWidth = 1; g.strokeRect(0.5, 0.5, 1919, 1079);
+  return c;
+}
+let demoTabs = null;
+function demoEmit() {
+  const T = demoTabs, t = T.list.find((x) => x.id === T.active) || T.list[0];
+  onMessage({t: "tabs", active: T.active, max: 6, list: T.list.map((x) => Object.assign({}, x))});
+  onMessage({t: "info", url: t.url, title: t.title, w: 1280, h: 720, loading: !!t.loading, canBack: true, tab: T.active, focus: null});
+  if (t.url !== "about:blank") { uploadTex(panelTex, demoPage(t.title, t.url), 1280, 720); phText = ""; }
+}
+function demoServer(o) {                         // a tiny fake laptop: tabs and navigation only
+  const T = demoTabs; if (!T) return;
+  if (o.t === "tab") {
+    if (o.action === "new") {
+      if (T.list.length >= 6) { onMessage({t: "toast", text: "Window limit (6) reached"}); return; }
+      const id = String(T.next++); T.list.push({id, title: "", url: "about:blank", loading: false}); T.active = id;
+    } else if (o.action === "switch") { if (T.list.some((x) => x.id === o.id)) T.active = o.id; }
+    else if (o.action === "close") {
+      const id = o.id || T.active, i = T.list.findIndex((x) => x.id === id); if (i < 0) return;
+      T.list.splice(i, 1);
+      if (!T.list.length) T.list.push({id: String(T.next++), title: "DemoTube", url: "https://www.youtube.com/", loading: false});
+      if (id === T.active) T.active = (T.list[i] || T.list[i - 1]).id;
+    }
+    demoEmit();
+  } else if (o.t === "nav" && o.to === "url") {
+    const t = T.list.find((x) => x.id === T.active), s = String(o.url).trim();
+    const u = /^[a-z]+:\/\//i.test(s) ? s : (/^[^\s]+\.[a-z]{2,}(\/.*)?$/i.test(s) ? "https://" + s + (s.includes("/") ? "" : "/")
+                                                                         : "https://www.google.com/search?q=" + encodeURIComponent(s));
+    t.url = u; t.title = u.replace(/^https?:\/\//, "").split("/")[0];
+    demoEmit();
+  }
+}
+function demoVideo(c, proj) {
+  setMode("vr");
+  state.vw = c.width; state.vh = c.height;
+  state.vstereo = PARAMS.get("stereo") || "mono";
+  if (proj === "mesh") proj = "eac";
+  setProj(proj); state.projAuto = proj;
+  uploadTex(videoTex, c, c.width, c.height, isCinema(proj));
+  demoVideoSrc = c;
+  state.videoTitle = "Demo video: " + projLabel(proj);
+  state.vinfo = {w: c.width, h: c.height, codec: "canvas", mode: "demo"};
+  state.videoA = 1; state.panelA = 0; state.demoPaused = false;
+  barShow(4000);
+}
+function loadDemoImage(src, cb) {
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
+    c.getContext("2d").drawImage(img, 0, 0); cb(c, img);
+  };
+  img.onerror = () => showError("demo: could not load " + src);
+  img.src = src;
+}
+function demoImageTest() {                       // C3 on a synthetic stereo video (canvas -> captureStream -> <video>)
+  const layout = PARAMS.get("layout") || "sbs", proj = PARAMS.get("proj") || "flat", src = PARAMS.get("src") || "guess";
+  const c = document.createElement("canvas"); c.width = 640; c.height = 360;
+  const g = c.getContext("2d");
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const objs = Array.from({length: 46}, () => ({x: rnd(), y: rnd(), w: 0.03 + rnd() * 0.12, h: 0.04 + rnd() * 0.2,
+                                               z: rnd(), hue: Math.floor(rnd() * 360), l: 25 + Math.floor(rnd() * 50)}));
+  let pic = null;
+  const view = (x0, y0, w, h, eye, t) => {
+    g.save(); g.beginPath(); g.rect(x0, y0, w, h); g.clip();
+    if (pic) { g.drawImage(pic, x0 + eye * 3, y0, w, h); }
+    else {
+      const grd = g.createLinearGradient(0, y0, 0, y0 + h); grd.addColorStop(0, "#28466e"); grd.addColorStop(1, "#c8b48c");
+      g.fillStyle = grd; g.fillRect(x0, y0, w, h);
+      for (const o of objs) {
+        const x = ((o.x + t * 0.02 * (1 + o.z)) % 1.2 - 0.1) * w + eye * o.z * w * 0.02;
+        g.fillStyle = `hsl(${o.hue},50%,${o.l}%)`; g.fillRect(x0 + x, y0 + o.y * h, o.w * w, o.h * h);
+        g.strokeStyle = "rgba(0,0,0,.5)"; g.strokeRect(x0 + x, y0 + o.y * h, o.w * w, o.h * h);
+      }
+    }
+    g.restore();
+  };
+  const t0 = performance.now();
+  const draw = () => {
+    const t = (performance.now() - t0) / 1000;
+    if (layout === "sbs") { view(0, 0, 320, 360, -1, t); view(320, 0, 320, 360, 1, t); }
+    else if (layout === "tb") { view(0, 0, 640, 180, -1, t); view(0, 180, 640, 180, 1, t); }
+    else view(0, 0, 640, 360, 0, t);
+    g.fillStyle = `rgba(255,255,255,${0.02 + 0.02 * Math.sin(t * 7)})`; g.fillRect(0, 0, 640, 360);   // keep frames changing
+  };
+  const go = () => {
+    draw(); setInterval(draw, 33);
+    video.srcObject = c.captureStream(30); video.muted = true;
+    setMode("vr");
+    pb.gen++; pb.mode = "file"; pb.vid = null; pb.start = 0; pb.startedAt = performance.now(); pb.m = {duration: null};
+    state.vw = 640; state.vh = 360; state.vstereo = "mono";
+    setProj(proj); state.projAuto = proj;
+    state.videoTitle = "Image test: " + layout; state.vinfo = {w: 640, h: 360, codec: "canvas", mode: "stream"};
+    video.play().catch((e) => console.warn("demo play:", e.message));
+    imageTestArm({image_test: true, projection_source: src});
+    IT.t0 = 0;
+    setInterval(imageTestTick, 250);
+  };
+  if (PARAMS.get("img")) loadDemoImage(PARAMS.get("img"), (cv) => { pic = cv; go(); }); else go();
+}
+function runDemo() {
+  demoTabs = {next: 4, active: "2", list: [
+    {id: "1", title: "DemoTube", url: "https://www.youtube.com/", loading: false},
+    {id: "2", title: "Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film - DemoTube", url: "https://www.youtube.com/watch?v=aqz-KE-bpKQ", loading: false},
+    {id: "3", title: "Example Domain", url: "https://example.com/", loading: true}]};
+  demoEmit();
+  uploadTex(panelTex, demoPage(), 1280, 720); state.frameSeen = true;
+  state.info.loading = PARAMS.has("loading");
+  if (DEMO === "screen") { setMode("screen"); state.cinemaT = 1; }
+  else if (DEMO === "flat1080") demoVideo(flat1080Canvas(), "flat");
+  else if (DEMO === "bar") { demoVideo(demoVideoCanvas("flat"), "flat"); bar.until = Infinity; }
+  else if (DEMO === "kbd") kbOpen("address");
+  else if (DEMO === "imgtest") demoImageTest();
+  else if (PROJ[DEMO]) {
+    if (PARAMS.get("img")) loadDemoImage(PARAMS.get("img"), (c) => demoVideo(c, DEMO));
+    else demoVideo(demoVideoCanvas(DEMO), DEMO);
+  }
+  if (PARAMS.has("focus")) {
+    const f = PARAMS.get("focus") || "search";
+    onMessage({t: "info", url: state.info.url, title: state.info.title, w: 1280, h: 720, canBack: true, tab: "2", focus: {input: f, enter: "search"}});
+    onMessage({t: "kbd", open: true, mode: "field", input: f, enter: "search"});
+  }
+  if (PARAMS.has("hud")) hudShow({title: "Demo video title", text: "Looking up the video…"}, Infinity), hud3.a = 1;
+  state.link = "demo";
+}
+
+if (gl) {
+  resize();
+  connectWs();
+  if (!DEMO || PARAMS.has("caps")) probeCaps().then((c) => { caps = c; window.__vrbCaps = c; send(Object.assign({t: "caps"}, c)); })
+                                            .catch((e) => console.warn("caps probe:", e && e.message));
+  if (DEMO) runDemo();
+  requestAnimationFrame(frame);
+  if (AUTOSTART) begin(false);
+}
+</script>
+</body>
+</html>
