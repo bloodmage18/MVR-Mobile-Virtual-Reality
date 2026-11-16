@@ -87,7 +87,8 @@
   <button id="go" type="button">TAP TO START</button>
   <p>Turn the phone sideways (landscape). After the tap, allow <b>Motion &amp; Orientation</b> if asked.</p>
   <p>Point with your head (the ring). A = click, B = back, left stick = scroll, X = play the video in VR,
-     L3 (press the left stick) = keyboard, R3 = new window (hold = close it), LT / RT = switch windows.
+     L3 (press the left stick) = keyboard, R3 = new window (hold = close it), LT / RT = switch windows,
+     hold LB = a private window with Tor.
      In a video: A = the player-bar button you look at (else pause), Y = change projection / 3D, B = back. Start = re-centre.</p>
 </div>
 <div id="err" hidden></div>
@@ -916,7 +917,8 @@ function onMessage(m) {
       const prev = state.tabs.active;
       state.tabs = {active: m.active != null ? String(m.active) : null, max: m.max || 6,
                     list: Array.isArray(m.list) ? m.list.map((t) => ({id: String(t.id), title: String(t.title || ""),
-                                                                      url: String(t.url || ""), loading: !!t.loading})) : []};
+                                                                      url: String(t.url || ""), loading: !!t.loading,
+                                                                      tor: !!t.tor, torState: String(t.torState || "")})) : []};
       if (prev != null && state.tabs.active !== prev) {
         const ours = pendingNewTab && performance.now() - pendingNewTab < 5000;
         pendingNewTab = 0;
@@ -1999,13 +2001,14 @@ function tabsForStrip() {
 function activeTabId() { return state.tabs.active != null ? state.tabs.active : (state.info.tab || "1"); }
 function chromeLayout() {                        // hit rects in canvas pixels
   const list = tabsForStrip(), items = [];
-  const tw = Math.min(330, (2048 - 120 - 360) / Math.max(1, list.length));
+  const tw = Math.min(330, (2048 - 240 - 360) / Math.max(1, list.length));
   list.forEach((t, i) => {
     const x = i * tw;
     items.push({kind: "tab", id: t.id, x, y: 0, w: tw - 56, h: 120, t});
     items.push({kind: "close", id: t.id, x: x + tw - 56, y: 0, w: 56, h: 120});
   });
   items.push({kind: "new", x: list.length * tw, y: 0, w: 120, h: 120});
+  items.push({kind: "tor", x: list.length * tw + 120, y: 0, w: 120, h: 120});   // Brave's private window with Tor
   items.push({kind: "back", x: 0, y: 128, w: 120, h: 128});
   items.push({kind: "fwd", x: 120, y: 128, w: 120, h: 128});
   items.push({kind: "reload", x: 240, y: 128, w: 120, h: 128});
@@ -2030,6 +2033,7 @@ function chromeClick(it) {
     case "tab": if (it.id !== activeTabId()) send({t: "tab", action: "switch", id: it.id}); break;
     case "close": send({t: "tab", action: "close", id: it.id}); hudShow({title: "Window closed", text: ""}, 1500); break;
     case "new": newWindow(); break;
+    case "tor": newTorWindow(); break;
     case "back": if (state.info.canBack) send({t: "nav", to: "back"}); break;
     case "fwd": send({t: "nav", to: "forward"}); break;
     case "reload": send({t: "nav", to: "reload"}); break;
@@ -2043,7 +2047,7 @@ function chromeDraw(now) {
   const list = tabsForStrip(), act = activeTabId(), hit = state.ptrTarget === "chrome" ? state.chromeHit : null;
   const hk = hit ? hit.kind + ":" + (hit.id || "") : "";
   const key = JSON.stringify([list, act, state.tabs.max, activeUrl(), state.info.canBack, hk, padSource().text,
-                              list.some((t) => t.loading) ? Math.floor(now / 400) % 2 : 0]);
+                              list.some((t) => t.loading || t.torState === "connecting") ? Math.floor(now / 400) % 2 : 0]);
   if (key === U.key) return;
   U.key = key;
   const L = chromeLayout();
@@ -2053,12 +2057,22 @@ function chromeDraw(now) {
   // row 1: tabs
   list.forEach((t, i) => {
     const x = i * L.tw, on = t.id === act;
-    g.fillStyle = on ? "#2f81f7" : isHit("tab", t.id) ? "#2a3550" : "#1a2030";
+    if (t.tor) g.fillStyle = on ? "#7b3fe4" : isHit("tab", t.id) ? "#4a3474" : "#2c2142";   // Tor windows: purple
+    else g.fillStyle = on ? "#2f81f7" : isHit("tab", t.id) ? "#2a3550" : "#1a2030";
     rr(g, x + 4, 8, L.tw - 8, 108, 18); g.fill();
     let tx = x + 24;
-    if (t.loading) { g.fillStyle = Math.floor(now / 400) % 2 ? "#ffd166" : "#b08a2e"; g.beginPath(); g.arc(x + 30, 62, 9, 0, 7); g.fill(); tx = x + 50; }
+    if (t.tor) {                                  // purple "Tor" label in front of the title
+      g.font = `700 30px ${FONT}`; g.textAlign = "left";
+      g.fillStyle = on ? "#efe4ff" : "#b48cff"; rr(g, x + 14, 44, 66, 38, 10); g.fill();
+      g.fillStyle = on ? "#5a24b8" : "#1c1430"; g.fillText("Tor", x + 21, 64);
+      tx = x + 88;
+    }
+    if (t.loading || (t.tor && t.torState === "connecting")) {
+      g.fillStyle = Math.floor(now / 400) % 2 ? "#ffd166" : "#b08a2e"; g.beginPath(); g.arc(tx + 6, 62, 9, 0, 7); g.fill(); tx += 26;
+    }
     g.fillStyle = "#f2f5fa"; g.font = `600 44px ${FONT}`; g.textAlign = "left";
-    const title = t.url === "about:blank" ? "New window" : (t.title || t.url || "Window");
+    const title = t.tor && t.torState === "connecting" ? "Connecting to Tor…"
+                : t.url === "about:blank" ? "New window" : (t.title || t.url || "Window");
     g.fillText(fitText(g, title, L.tw - (tx - x) - 64), tx, 64);
     g.fillStyle = isHit("close", t.id) ? "#ff8c8c" : on ? "#e8f0ff" : "#8f9bb0";
     g.font = `600 46px ${FONT}`; g.textAlign = "center";
@@ -2069,6 +2083,10 @@ function chromeDraw(now) {
   rr(g, nx + 4, 8, 112, 108, 18); g.fill();
   g.fillStyle = full ? "#4a5263" : "#f2f5fa"; g.font = `600 72px ${FONT}`; g.textAlign = "center";
   g.fillText("+", nx + 60, 64);
+  g.fillStyle = full ? "#141821" : isHit("tor") ? "#4a3474" : "#2c2142";        // Tor window button
+  rr(g, nx + 124, 8, 112, 108, 18); g.fill();
+  g.fillStyle = full ? "#4a5263" : "#c9a6ff"; g.font = `700 40px ${FONT}`;
+  g.fillText("Tor", nx + 180, 64);
   drawBadge(g, 2048 - 16, 62, 360, 34);
   // row 2: back / forward / reload, URL field, keyboard
   const btn = (kind, label, x, w, enabled) => {
@@ -2080,10 +2098,20 @@ function chromeDraw(now) {
   const uw = 2048 - 370 - 140;
   g.fillStyle = isHit("url") ? "#222b3f" : "#161b27"; rr(g, 374, 136, uw - 8, 112, 18); g.fill();
   g.strokeStyle = isHit("url") ? "#2f81f7" : "#2a3346"; g.lineWidth = 4; g.stroke();
-  const url = activeUrl(), shownUrl = url === "about:blank" ? "" : url.replace(/^https:\/\//, "");
+  const url = activeUrl(), shownUrl = url === "about:blank" || /^(chrome|brave):\/\/newtab/.test(url) ? "" : url.replace(/^https:\/\//, "");
+  const at = list.find((t) => t.id === act), torOn = !!(at && at.tor);
+  let ux = 400;
+  if (torOn) {                                    // the address bar says which kind of window this is
+    g.font = `700 36px ${FONT}`; g.textAlign = "left";
+    const lab = at.torState === "connecting" ? "Tor: connecting…" : "Tor";
+    const lw = g.measureText(lab).width + 36;
+    g.fillStyle = "#7b3fe4"; rr(g, 392, 162, lw, 64, 14); g.fill();
+    g.fillStyle = "#f4ecff"; g.fillText(lab, 410, 195);
+    ux = 392 + lw + 18;
+  }
   g.textAlign = "left"; g.font = `48px ${FONT}`;
   g.fillStyle = shownUrl ? "#dfe6f2" : "#6b768a";
-  g.fillText(fitText(g, shownUrl || "Type an address or search", uw - 60), 400, 194);
+  g.fillText(fitText(g, shownUrl || "Type an address or search", uw - 60 - (ux - 400)), ux, 194);
   btn("kbd", "⌨", 2048 - 130, 130, true);
   uploadTex(U.T, U.c, 2048, 256);
 }
@@ -2221,6 +2249,12 @@ function newWindow() {
   pendingNewTab = performance.now();
   kbOpen("address", {buf: ""});
 }
+function newTorWindow() {                        // Brave's own "Private window with Tor" (opened on the laptop)
+  const list = state.tabs.list;
+  if (list.length >= (state.tabs.max || 6)) { hudShow({title: "Up to " + (state.tabs.max || 6) + " windows: close one first", text: ""}, 3000); return; }
+  send({t: "tab", action: "new_tor"});
+  hudShow({title: "Opening a Tor window…", text: "Brave's private window with Tor: slower, videos play on the big screen"}, 4000);
+}
 function switchWindow(d) {
   const list = state.tabs.list;
   if (list.length <= 1) { hudShow({title: "Only one window", text: "R3 = new window"}, 2000); return; }
@@ -2306,6 +2340,7 @@ const bigger = (a, b) => Math.abs(a) >= Math.abs(b) ? a : b;
 let prevBits = 0;
 const holdSince = {}, holdRepeat = {}, trig = {l: false, r: false}, stick = {dir: 0, since: 0, rep: 0};
 let r3 = null;                                   // R3 press in browser mode: {warned, done}
+let lb = null;                                   // LB press in browser mode: tap = back, hold = Tor window
 function readPads() {
   const out = {bits: 0, lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0};
   const names = [];
@@ -2399,7 +2434,7 @@ function onButton(b) {
     case 2: send({t: "vr", action: "enter"}); hudShow({title: "Play in VR", text: "Looking for a video on this page…"}, 4000); break;
     case 3: nav("reload"); hint("Reload", 1000); break;
     case 8: r3 = {warned: false, done: false}; break;   // tap = new window, hold = close (onButtonHeld / Up)
-    case 9: nav("back"); break;
+    case 9: if (state.mode === "browser") lb = {warned: false, done: false}; else nav("back"); break;
     case 10: nav("forward"); break;
     case 13: key("ArrowLeft"); break;
     case 14: key("ArrowRight"); break;
@@ -2415,6 +2450,11 @@ function onButtonHeld(b, held, now) {
     if (held >= 800) { r3.done = true; closeWindow(); }
     return;
   }
+  if (b === 9 && lb && !lb.done && state.mode === "browser" && !kb.open) {
+    if (held >= 300 && !lb.warned) { lb.warned = true; hudShow({title: "Hold for a Tor window…", text: ""}, 900); }
+    if (held >= 800) { lb.done = true; newTorWindow(); }
+    return;
+  }
   if (held < 400) return;
   if (kb.open && lensPanel.hidden && (b === 2 || (b >= 11 && b <= 14))) {
     if (now - holdRepeat[b] >= 80) { holdRepeat[b] = now; if (b === 2) kbBackspace(); else kbMove(b); }
@@ -2428,6 +2468,10 @@ function onButtonUp(b, held) {
   if (b === 8) {
     const r = r3; r3 = null;
     if (r && !r.done && held < 800 && state.mode === "browser") { if (r.warned) hudHide(); newWindow(); }
+  }
+  if (b === 9) {                                 // LB tap (released before 800 ms) = back
+    const l = lb; lb = null;
+    if (l && !l.done && held < 800 && state.mode === "browser") { if (l.warned) hudHide(); nav("back"); }
   }
 }
 function pollPads(dt) {

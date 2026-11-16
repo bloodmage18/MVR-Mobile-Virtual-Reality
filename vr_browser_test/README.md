@@ -5,6 +5,8 @@ Browse with the Xbox controller. When a video starts, the browser fades away and
 the phone: normal videos on a big curved cinema screen, 360 and VR180 videos all around you. B takes you back.
 
 The browser is Brave, running hidden on the laptop with its own profile, so you sign in once and stay signed in.
+It is a real Brave window parked off the edge of the screen (not on the taskbar): you may see it flash for a
+moment when the server starts. Don't minimise or close it from the Task Manager while you browse.
 
 ## 1. Sign in once
 
@@ -35,7 +37,7 @@ and buttons Back, Home (YouTube), New window, Play in VR. They act on the window
 | B | back (cancels a video that is getting ready) | back to the browser | close keyboard |
 | X | play this page's video in VR | show / hide the player bar | backspace |
 | Y | reload | next projection (fixes split / bent videos) | space |
-| LB / RB | back / forward | move the player-bar highlight | shift / symbols |
+| LB / RB | back (hold LB: new Tor window) / forward | move the player-bar highlight | shift / symbols |
 | LT / RT | previous / next window | | caret left / right (close the keyboard to switch windows) |
 | L3 (press left stick) | keyboard on / off | keyboard on / off | close keyboard |
 | R3 (press right stick) | new window (hold: close window) | | nothing (close the keyboard first) |
@@ -58,6 +60,32 @@ The top of the browser shows which controller is active ("Pad: laptop", "Pad: ph
 - Above the page: the windows (A on a tab switches, × closes, + opens one) and the address bar
   (◀ ▶ ⟳, the address, ⌨). Pop-ups that open by themselves are closed.
 
+## Private window with Tor
+
+Brave's own **"New private window with Tor"** (the same as Alt+Shift+N in Brave) works from the headset:
+
+- Open one with the purple **Tor** button next to **+** in the window strip, or **hold LB** (about 1 s; a short
+  LB press is still "back"). The server presses Alt+Shift+N in the hidden Brave, so the laptop's focus jumps
+  to Brave for a split second.
+- Tor windows have a purple **Tor** label in the strip and the address bar. The first one says
+  **"Connecting to Tor…"** until Tor is up (10-30 s, sometimes longer); then type an address as usual.
+- They count towards the 6 windows. Close them like any window (× or hold R3). Brave forgets everything
+  from them when the last Tor window closes.
+- **Limits:** it is slower than normal browsing (all traffic goes through Tor), Brave's Tor protections
+  apply (some sites block Tor or show captchas), you are not signed in to anything there.
+- **Videos in a Tor window are not streamed to the phone** (that would fetch them from the laptop's own
+  connection and show your real IP). X shows the browser picture on the cinema screen instead, with the
+  sound on the laptop; it can be choppy.
+- No cookies of a Tor window are ever used by the server, and Tor-window addresses are not written to the log.
+  The server's page helpers (video and text-field detection) run hidden from the sites in a Tor window, so a
+  site cannot tell this setup apart from any other Brave Tor window. If Brave restarts by itself, the page
+  of a Tor window is not reopened (the restarted window is the normal, signed-in one).
+- On the cinema screen a video fills the page instead of going truly full screen (true full screen would put
+  the hidden Brave window on the laptop's monitor). If a site goes full screen by itself (YouTube's F key),
+  the window is pushed straight back off the monitor; you may see a very short flash on the laptop.
+- Tor windows need the normal mode: they are not available when the server runs with `--headless`
+  (the old hidden mode without a real window, kept as a fallback: `python vr_browser_test\server.py --headless`).
+
 ## Videos
 
 - Videos are **streamed**: they start after a moment (1-2 s on a YouTube page that has been open for a few
@@ -77,6 +105,10 @@ The top of the browser shows which controller is active ("Pad: laptop", "Pad: ph
   `https://<laptop-ip>:8443/ca.crt` (same as for the phone_host test).
 - **403 / "access key"**: open the full address including `?k=...`.
 - **Not signed in on YouTube**: stop the server, run `login.bat`, sign in, close Brave, start again.
+- **Tor window says "Brave did not open a Tor window"**: Tor may be switched off in Brave (Settings → Privacy →
+  Private window with Tor); turn it on with `login.bat`. If it keeps "Connecting to Tor…" for minutes, close it
+  and open a new one (some networks block Tor).
+- **A Brave window appears on the laptop screen**: the server moves it back by itself; if one stays, restart the server.
 - **"No controller"**: orange = the laptop sees no controller (plug it in, or pair it with the phone);
   red = the phone lost the connection to the laptop. "Pad: phone" means the phone's own Bluetooth pad is used.
 - **Video stutters (e.g. on the Galaxy A08)**: when the phone drops frames for about 10 s it switches to a lower

@@ -1,4 +1,5 @@
-"""VR browser test (laptop side): a headless Brave, streamed to a phone in a cardboard headset.
+"""VR browser test (laptop side): a hidden Brave (a real window parked off-screen; --headless for the old
+headless mode), streamed to a phone in a cardboard headset. Brave's own "Private window with Tor" works too.
 
     vr_browser_test.bat            (or: python vr_browser_test/server.py)
     vr_browser_test/login.bat      (or: server.py --login) sign in once in a normal Brave window
@@ -13,7 +14,7 @@ Server -> phone
     {"t":"video","state":"resolving"|"progress"|"ready"|"screen"|"error"|"exit", ...}
     {"t":"toast","text"}
 Phone -> server
-    ptr / click / scroll / key / text / nav (back|forward|reload|home|url) / tab (new|switch|close)
+    ptr / click / scroll / key / text / nav (back|forward|reload|home|url) / tab (new|new_tor|switch|close)
     vr (enter|exit) / hello / caps / proj / vfail
 Media (all need ?k=<key>): /media/<mid>/{v|a|f} (Range), /media/<mid>/{v|a}/index, /media/<mid>/mesh,
 /media/<mid>.mp4 (= f).
@@ -66,6 +67,9 @@ HEAD_BYTES = 262144                      # first bytes kept per track (index + 3
 MEDIA_TTL = 6 * 3600
 MEDIA_MAX = 40
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+HEADLESS = False                         # --headless: the old mode (no real window, no Tor windows)
+WIN_W, WIN_H = 1400, 900                 # real (off-screen) Brave windows: the page area is bigger than W/zoom x H/zoom
+TOR_WAIT = 12.0                          # seconds Brave may take to open a Tor window after Alt+Shift+N
 
 sys.path.append(str(PHONE_HOST))         # pad_relay
 
@@ -127,9 +131,12 @@ def profile_users() -> list[tuple[int, str]]:
     prof = str(PROFILE).lower().replace("/", "\\")
     for p in psutil.process_iter(["name", "cmdline"]):
         try:
+            if "brave" not in (p.info["name"] or "").lower():    # not this server (its --profile) or tor.exe
+                continue
             cmd = " ".join(p.info["cmdline"] or []).lower().replace("/", "\\")
             if prof in cmd and "--type=" not in cmd:
-                out.append((p.pid, "headless" if "--headless" in cmd else "window"))
+                # a server's Brave always has a DevTools port (headless or the hidden off-screen window)
+                out.append((p.pid, "server" if "--remote-debugging-port" in cmd else "window"))
         except Exception:
             pass
     return out
@@ -225,6 +232,244 @@ def kill_with_us(proc: subprocess.Popen) -> None:
         log(f"[browser] job object not set ({e!r}); the browser may outlive a killed server")
 
 
+# ================================================================ the hidden Brave window (Windows only)
+# Brave runs as a NORMAL window (Brave's own "Private window with Tor" does not exist headless), parked far
+# left of every monitor. It keeps rendering there (needs --disable-backgrounding-occluded-windows and must
+# never be minimized: a minimized window sends 0 screencast frames), and CDP input reaches it.
+def park_x() -> int:
+    """Left edge for parked windows: left of every monitor (the virtual screen can start at negative x)."""
+    try:
+        import ctypes
+        return min(-4000, int(ctypes.windll.user32.GetSystemMetrics(76)) - 4000)     # SM_XVIRTUALSCREEN
+    except Exception:
+        return -4000
+
+
+class _Win:
+    """ctypes helpers for Brave's top-level windows (taskbar hiding, Alt+Shift+N)."""
+    GWL_EXSTYLE, WS_EX_TOOLWINDOW, WS_EX_APPWINDOW = -20, 0x80, 0x40000
+
+    def __init__(self) -> None:
+        import ctypes
+        from ctypes import wintypes
+        self.ct, self.wt = ctypes, wintypes
+        self.u = ctypes.windll.user32
+        self.k = ctypes.windll.kernel32
+        self.u.GetWindowLongPtrW.restype = ctypes.c_ssize_t
+        self.u.GetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int]
+        self.u.SetWindowLongPtrW.restype = ctypes.c_ssize_t
+        self.u.SetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_ssize_t]
+        self.u.GetForegroundWindow.restype = wintypes.HWND
+        self.u.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.c_void_p]
+        self.u.GetAncestor.restype = wintypes.HWND
+        self.u.GetAncestor.argtypes = [wintypes.HWND, ctypes.c_uint]
+        self.guard_moves = 0                                            # windows the guard pushed off
+
+        class KI(ctypes.Structure):
+            _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD), ("dwFlags", wintypes.DWORD),
+                        ("time", wintypes.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
+
+        class INPUT(ctypes.Structure):
+            class _U(ctypes.Union):
+                _fields_ = [("ki", KI), ("pad", ctypes.c_byte * 32)]
+            _anonymous_ = ("u",)
+            _fields_ = [("type", wintypes.DWORD), ("u", _U)]
+        self.KI, self.INPUT = KI, INPUT
+
+    def windows(self, pid: int) -> list[int]:
+        """Visible top-level browser windows of the Brave process `pid`."""
+        ct, wt, u = self.ct, self.wt, self.u
+        out: list[int] = []
+
+        @ct.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+        def cb(h, _):
+            p = wt.DWORD()
+            u.GetWindowThreadProcessId(h, ct.byref(p))
+            if p.value == pid and u.IsWindowVisible(h) and not u.GetWindow(h, 4):      # GW_OWNER: no bubbles
+                c = ct.create_unicode_buffer(64)
+                u.GetClassNameW(h, c, 64)
+                if c.value == "Chrome_WidgetWin_1" and u.GetWindowTextLengthW(h) > 0:
+                    out.append(h)
+            return True
+        u.EnumWindows(cb, 0)
+        return out
+
+    def off_taskbar(self, pid: int) -> int:
+        """WS_EX_TOOLWINDOW on every Brave window (no taskbar button, not in Alt+Tab). The taskbar only
+        notices a style change when the window is hidden and shown again (without activating it)."""
+        n = 0
+        for h in self.windows(pid):
+            ex = self.u.GetWindowLongPtrW(h, self.GWL_EXSTYLE)
+            if ex & self.WS_EX_TOOLWINDOW and not ex & self.WS_EX_APPWINDOW:
+                continue
+            self.u.ShowWindow(h, 0)                                    # SW_HIDE
+            self.u.SetWindowLongPtrW(h, self.GWL_EXSTYLE, (ex | self.WS_EX_TOOLWINDOW) & ~self.WS_EX_APPWINDOW)
+            self.u.ShowWindow(h, 4)                                    # SW_SHOWNOACTIVATE (never minimized)
+            n += 1
+        return n
+
+    def on_screen(self, h: int) -> bool:
+        return bool(self.u.MonitorFromWindow(h, 0))                     # MONITOR_DEFAULTTONULL
+
+    def push_off(self, h: int, x: int) -> None:
+        """Move a window that came up on a monitor (a bubble such as "Translate this page?", clamped onto the
+        screen by Brave) back off-screen, without activating it."""
+        self.u.SetWindowPos(h, 0, x, 0, 0, 0, 0x0001 | 0x0004 | 0x0010)     # NOSIZE | NOZORDER | NOACTIVATE
+
+    def sweep(self, pid: int, x: int) -> int:
+        """Every visible top-level window of `pid` (owned bubbles too) that is on a monitor -> off-screen."""
+        ct, wt, u = self.ct, self.wt, self.u
+        found: list[int] = []
+
+        @ct.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+        def cb(h, _):
+            p = wt.DWORD()
+            u.GetWindowThreadProcessId(h, ct.byref(p))
+            if p.value == pid and u.IsWindowVisible(h) and self.on_screen(h):
+                found.append(h)
+            return True
+        u.EnumWindows(cb, 0)
+        for h in found:
+            self.push_off(h, x)
+        return len(found)
+
+    def start_guard(self, pid: int) -> None:
+        """A WinEvent hook (own thread + message loop): the moment a top-level window of `pid` is shown or
+        moved onto a monitor, it goes back off-screen, so nothing of the hidden Brave flashes on the laptop
+        screen (the 1 s watchdog sweep is only the safety net)."""
+        import threading
+        self.stop_guard()
+        ready = threading.Event()
+
+        def run():
+            ct, wt, u = self.ct, self.wt, self.u
+            proto = ct.WINFUNCTYPE(None, wt.HANDLE, wt.DWORD, wt.HWND, wt.LONG, wt.LONG, wt.DWORD, wt.DWORD)
+
+            def cb(_hook, _ev, h, obj, child, _t, _ms):
+                try:
+                    # OBJID_WINDOW + CHILDID_SELF of a top-level window (GA_ROOT: GA_PARENT is the desktop)
+                    if h and obj == 0 and child == 0 and u.GetAncestor(h, 2) == h and u.IsWindowVisible(h) \
+                            and self.on_screen(h):
+                        self.push_off(h, park_x())
+                        self.guard_moves += 1
+                except Exception:
+                    pass
+            self._guard_cb = proto(cb)                                  # keep a reference
+            u.SetWinEventHook.restype = wt.HANDLE
+            hooks = [u.SetWinEventHook(a, b, 0, self._guard_cb, pid, 0, 0)   # WINEVENT_OUTOFCONTEXT
+                     for a, b in ((0x8002, 0x8002), (0x800B, 0x800B))]       # OBJECT_SHOW, OBJECT_LOCATIONCHANGE
+            self._guard_tid = self.k.GetCurrentThreadId()
+            ready.set()
+            msg = wt.MSG()
+            while u.GetMessageW(ct.byref(msg), 0, 0, 0) > 0:
+                u.TranslateMessage(ct.byref(msg))
+                u.DispatchMessageW(ct.byref(msg))
+            for hk in hooks:
+                if hk:
+                    u.UnhookWinEvent(hk)
+        threading.Thread(target=run, daemon=True, name="vrb-window-guard").start()
+        ready.wait(2)
+
+    def stop_guard(self) -> None:
+        tid = getattr(self, "_guard_tid", 0)
+        if tid:
+            self.u.PostThreadMessageW(tid, 0x0012, 0, 0)                # WM_QUIT
+            self._guard_tid = 0
+
+    def _keys(self, seq: list[tuple[int, bool]]) -> int:
+        arr = (self.INPUT * len(seq))(*[self.INPUT(type=1, ki=self.KI(vk, 0, 2 if up else 0, 0, 0)) for vk, up in seq])
+        return self.u.SendInput(len(seq), arr, self.ct.sizeof(self.INPUT))
+
+    def foreground(self, h: int) -> bool:
+        """Make h the foreground window. Windows refuses SetForegroundWindow to a background process;
+        attaching to the current foreground thread's input queue is the accepted way around that."""
+        u = self.u
+        if not h:
+            return False
+        if u.GetForegroundWindow() == h:
+            return True
+        u.SetForegroundWindow(h)
+        if u.GetForegroundWindow() == h:
+            return True
+        fg = u.GetForegroundWindow()
+        fgt = u.GetWindowThreadProcessId(fg, None) if fg else 0
+        me = self.k.GetCurrentThreadId()
+        attached = bool(fgt and fgt != me and u.AttachThreadInput(me, fgt, True))
+        try:
+            u.BringWindowToTop(h)
+            u.SetForegroundWindow(h)
+        finally:
+            if attached:
+                u.AttachThreadInput(me, fgt, False)
+        return u.GetForegroundWindow() == h
+
+    def tor_hotkey(self, pid: int) -> str | None:
+        """Alt+Shift+N (Brave: New private window with Tor) into one of our Brave windows. The keys go to
+        whatever window has the focus, so they are only sent while a Brave window of `pid` is in front.
+        Ctrl+L first: with the focus in the address bar the web page in that window never gets the keys (a
+        page could otherwise swallow Alt+Shift+N, or act on it). A blank helper window made with
+        Target.createTarget does not work: Brave ignores Alt+Shift+N there (tested). The caller gives the
+        focus back (restore_focus) once the Tor window is there. Returns None or why it failed."""
+        wins = self.windows(pid)
+        if not wins:
+            return "no Brave window found"
+        for h in wins[:2]:
+            if not self.foreground(h):
+                continue
+            time.sleep(0.15)                                       # let Brave process the activation
+            if self.u.GetForegroundWindow() != h:
+                continue
+            self._keys([(0x11, False), (0x4C, False), (0x4C, True), (0x11, True)])        # Ctrl+L
+            time.sleep(0.15)
+            self._keys([(0x12, False), (0x10, False), (0x4E, False), (0x4E, True), (0x10, True), (0x12, True)])
+            return None
+        return "Windows did not let the server bring Brave to the front"
+
+    def focus_guard(self, pid: int) -> bool:
+        """Our Brave windows are invisible, so they must never keep the foreground (a page going full screen
+        activates its window; keys typed next would vanish into it). Remembers the user's last foreground
+        window and gives it back when one of ours has taken it. True if it did."""
+        u = self.u
+        fg = u.GetForegroundWindow()
+        if not fg:
+            return False
+        p = self.wt.DWORD()
+        u.GetWindowThreadProcessId(fg, self.ct.byref(p))
+        if p.value != pid:
+            self._user_fg = fg
+            return False
+        prev = getattr(self, "_user_fg", 0)
+        if prev and u.IsWindow(prev) and u.IsWindowVisible(prev):
+            return self.foreground(prev)
+        return False
+
+    def restore_focus(self, prev: int, pid: int) -> None:
+        """Give the focus back to the user's window if one of our invisible Brave windows has it now."""
+        u = self.u
+        if not prev or not u.IsWindow(prev):
+            return
+        fg = u.GetForegroundWindow()
+        p = self.wt.DWORD()
+        if fg:
+            u.GetWindowThreadProcessId(fg, self.ct.byref(p))
+        if fg == prev or (fg and p.value != pid):
+            return                                                 # the user is already somewhere else
+        u.GetWindowThreadProcessId(prev, self.ct.byref(p))
+        if p.value != pid:
+            self.foreground(prev)
+
+
+_win: _Win | None = None
+
+
+def win() -> _Win | None:
+    global _win
+    if _win is None and sys.platform == "win32":
+        with contextlib.suppress(Exception):
+            _win = _Win()
+    return _win
+
+
 # Injected into every frame: report <video> 'play' events through the __vrbPlay binding and text-field
 # focus through __vrbFocus (input type only: never field values or names).
 HOOK_JS = r"""
@@ -294,6 +539,36 @@ HOOK_JS = r"""
   }, true);
 })();
 """
+# Screen mode in a real window: Element.requestFullscreen would move the hidden window onto the laptop's
+# monitor, so the video (or the iframe that holds it) is made to fill the page with CSS instead.
+# `this` = the element; on=false undoes it for the whole document.
+PSEUDO_FS_FN = r"""function (on) {
+  let st = document.getElementById('vrb-pfs');
+  if (!on) {
+    for (const e of document.querySelectorAll('[data-vrb-pfs],[data-vrb-pfa]')) {
+      e.removeAttribute('data-vrb-pfs'); e.removeAttribute('data-vrb-pfa'); }
+    if (st) st.remove();
+    return true;
+  }
+  if (!st) {
+    st = document.createElement('style'); st.id = 'vrb-pfs';
+    st.textContent = '[data-vrb-pfs]{position:fixed!important;left:0!important;top:0!important;right:0!important;' +
+      'bottom:0!important;width:100vw!important;height:100vh!important;max-width:none!important;' +
+      'max-height:none!important;margin:0!important;border:0!important;z-index:2147483647!important;' +
+      'background:#000!important;object-fit:contain!important;transform:none!important}' +
+      '[data-vrb-pfa]{z-index:2147483647!important;transform:none!important;filter:none!important;' +
+      'contain:none!important;will-change:auto!important}';
+    (document.head || document.documentElement).appendChild(st);
+  }
+  this.setAttribute('data-vrb-pfs', '');
+  for (let e = this.parentElement; e; e = e.parentElement) e.setAttribute('data-vrb-pfa', '');
+  return true;
+}"""
+# the main <video> of a document (same rule as HOOK_JS main(); self-contained, so it also works where no hook ran)
+MAIN_VIDEO_JS = ("(() => { let best = null, score = -1; for (const v of document.querySelectorAll('video')) {"
+                 " const r = v.getBoundingClientRect(); const s = r.width * r.height + (v.paused ? 0 : 1e7);"
+                 " if (s > score) { score = s; best = v; } } return best; })()")
+VRB_WORLD = "vrb"                    # isolated JS world of the hooks in Tor windows
 PAUSE_JS = "document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch (_) {} }); true"
 
 
@@ -320,15 +595,38 @@ class CDP:
         port = free_port()
         port_file = PROFILE / "DevToolsActivePort"
         port_file.unlink(missing_ok=True)
-        args = [str(BRAVE), "--headless=new", f"--remote-debugging-port={port}", f"--user-data-dir={PROFILE}",
-                f"--window-size={W},{H}", f"--force-device-scale-factor={zoom:g}", "--no-first-run", "--no-default-browser-check", "--disable-default-apps",
-                "--autoplay-policy=no-user-gesture-required", "--disable-background-timer-throttling",
-                "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows",
-                "--hide-crash-restore-bubble", "about:blank"]
+        common = [f"--remote-debugging-port={port}", f"--user-data-dir={PROFILE}",
+                  f"--force-device-scale-factor={zoom:g}", "--no-first-run", "--no-default-browser-check", "--disable-default-apps",
+                  "--autoplay-policy=no-user-gesture-required", "--disable-background-timer-throttling",
+                  "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows",
+                  "--hide-crash-restore-bubble"]
+        startup = None
+        if HEADLESS:
+            args = [str(BRAVE), "--headless=new", f"--window-size={W},{H}", *common, "about:blank"]
+        else:
+            # a real window, created off-screen from the start (no flash), never activated, never minimized
+            # --disable-backgrounding-occluded-windows keeps it rendering off-screen (no --disable-features
+            # needed: keep Brave's own feature set, its Tor window depends on it).
+            args = [str(BRAVE), f"--window-position={park_x()},0", f"--window-size={WIN_W},{WIN_H}",
+                    *common, "about:blank"]
+            if sys.platform == "win32":
+                startup = subprocess.STARTUPINFO()
+                startup.dwFlags |= 1                            # STARTF_USESHOWWINDOW
+                startup.wShowWindow = 4                         # SW_SHOWNOACTIVATE: do not take the focus
+        if not HEADLESS:
+            # A Tor client that was killed (Brave force-closed) leaves its control port + auth cookie files.
+            # Brave then reads the OLD cookie for the NEW Tor ("tor: control authentication failed" in Brave's
+            # log) and the Tor window stays "Disconnected" for good. Brave is not running here: remove them.
+            for f in ("controlport", "control_auth_cookie", "tor.pid"):
+                with contextlib.suppress(OSError):
+                    (PROFILE / "tor" / "watch" / f).unlink()
         self.proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                     creationflags=NO_WINDOW)
+                                     creationflags=NO_WINDOW, startupinfo=startup)
         kill_with_us(self.proc)
-        log(f"[browser] started headless Brave pid {self.proc.pid} (DevTools on 127.0.0.1:{port})")
+        if not HEADLESS and win() is not None:
+            win().start_guard(self.proc.pid)
+        log(f"[browser] started {'headless Brave' if HEADLESS else 'Brave (hidden off-screen window)'} "
+            f"pid {self.proc.pid} (DevTools on 127.0.0.1:{port})")
         deadline = time.monotonic() + 25
         url = None
         while time.monotonic() < deadline:
@@ -392,6 +690,8 @@ class CDP:
             self.pending.clear()
 
     async def stop(self) -> None:
+        if win() is not None:
+            win().stop_guard()
         if self.ws is not None:
             with contextlib.suppress(Exception):
                 await asyncio.wait_for(self.call("Browser.close"), 3)
@@ -484,6 +784,9 @@ class Tab:
         self.kbd_click = -1.0            # last_click value that the last kbd open was sent for
         self.children: dict[str, str] = {}   # iframe sessionId -> url
         self.closing = False             # we asked Brave to close it
+        self.ctx = ""                    # CDP browserContextId
+        self.tor = False                 # Brave's "Private window with Tor" (its own browser context)
+        self.tor_state = ""              # tor: "connecting" until a page loaded through Tor, then "ready"
 
 
 FOCUS_INPUTS = ("text", "search", "email", "url", "password", "tel", "number", "textarea", "contenteditable")
@@ -571,6 +874,11 @@ class VRBrowser:
         self.issued_vids: set[str] = set()            # "vid" keys sent in "ready" (G2 proj check)
         self.cur_play: dict | None = None             # what the current "ready" was built from (vfail rung)
         self.lock = asyncio.Lock()
+        self.main_ctx = ""                            # browserContextId of the normal (signed-in) profile
+        self.tor_wanted = 0                           # Tor windows asked for (Alt+Shift+N sent) and not arrived yet
+        self.tor_wanted_until = 0.0
+        self.tor_arrived: asyncio.Event = asyncio.Event()
+        self.tor_busy = False
 
     # ---------------------------------------------------------------- active-tab shortcuts (v1 names)
     @property
@@ -621,7 +929,8 @@ class VRBrowser:
             await self._start()
 
     async def _start(self) -> None:
-        last = self.url if self.url.startswith("http") else ""
+        # never reopen a Tor window's page: the restarted window is the normal profile (real IP, cookies)
+        last = self.url if self.url.startswith("http") and not self.tab.tor else ""
         await self.cdp.stop()
         self.tabs.clear()
         self.sess_tab.clear()
@@ -629,12 +938,17 @@ class VRBrowser:
         self.active = ""
         self.casting = False
         self.sent_tabs = None
+        self.tor_wanted = 0
+        # the new Brave's default browser context has a new id: until it is known, no target may be taken
+        # for a Tor window (a stale id made every normal window look like a stray private one -> closed)
+        self.main_ctx = ""
         self.cdp.on_browser_event = self._browser_event
         await self.cdp.start(max(0.5, min(3.0, self.zoom)))   # screencast frames are then 1280x720 real pixels
         await self.cdp.call("Target.setDiscoverTargets", {"discover": True})
         ver = await self.cdp.call("Browser.getVersion")
         self.ua = str(ver.get("userAgent", "")).replace("HeadlessChrome", "Chrome")
         tab = await self._open_tab("about:blank", activate=False)
+        self.main_ctx = tab.ctx
         # the first about:blank page Brave opens by itself is not needed
         with contextlib.suppress(Exception):
             for t in (await self.cdp.call("Target.getTargets"))["targetInfos"]:
@@ -644,18 +958,25 @@ class VRBrowser:
         await self._activate(tab)
         self.go(last or HOME_URL)
 
-    async def _open_tab(self, url: str, target_id: str | None = None, activate: bool = True) -> Tab:
-        """F2: a new window (target_id None) or an adopted popup target, with the v1 per-page setup."""
+    async def _open_tab(self, url: str, target_id: str | None = None, activate: bool = True,
+                        tor: bool = False) -> Tab:
+        """F2: a new window (target_id None) or an adopted popup / Tor window target, with the v1 per-page setup."""
         created = target_id is None
         if created:
-            r = await self.cdp.call("Target.createTarget", {"url": "about:blank", "newWindow": True,
-                                                            "width": W, "height": H})
+            params = {"url": "about:blank", "newWindow": True, "width": W, "height": H}
+            if not HEADLESS:
+                params.update(left=park_x(), top=0, width=WIN_W, height=WIN_H)
+            r = await self.cdp.call("Target.createTarget", params)
             target_id = r["targetId"]
         self.adopted.add(target_id)
         tab = Tab(str(self.next_tab), target_id)
         self.next_tab += 1
         tab.url = url or "about:blank"
+        tab.tor = tor
+        tab.tor_state = "connecting" if tor else ""
         self.tabs[tab.id] = tab
+        if not HEADLESS:
+            await self._park(target_id)
         try:
             r = await self.cdp.call("Target.attachToTarget", {"targetId": target_id, "flatten": True})
             s = tab.session = r["sessionId"]
@@ -663,12 +984,13 @@ class VRBrowser:
             self.cdp.handlers[s] = self._event
             await self.cdp.call("Page.enable", session=s)
             await self.cdp.call("Network.enable", session=s)
-            await self.cdp.call("Network.setUserAgentOverride", {"userAgent": self.ua}, session=s)
+            if HEADLESS:        # a real window already sends Brave's own user agent (and client hints)
+                await self.cdp.call("Network.setUserAgentOverride", {"userAgent": self.ua}, session=s)
             await self.cdp.call("Emulation.setFocusEmulationEnabled", {"enabled": True}, session=s)
             z = max(0.5, min(3.0, self.zoom))
             await self.cdp.call("Emulation.setDeviceMetricsOverride", {
                 "width": round(W / z), "height": round(H / z), "deviceScaleFactor": z, "mobile": False}, session=s)
-            await self._hook(s)
+            await self._hook(s, tor)
             await self.cdp.call("Target.setAutoAttach", {"autoAttach": True, "waitForDebuggerOnStart": True,
                                                          "flatten": True}, session=s)
         except Exception:
@@ -682,16 +1004,148 @@ class VRBrowser:
         if created and url and url != "about:blank":          # an adopted popup navigates by itself
             r = await self._safe("Page.navigate", {"url": url}, session=tab.session)
             if r and r.get("errorText"):
-                log(f"[browser] navigate {url}: {r['errorText']}")
+                log(f"[browser] navigate {self._lurl(tab, url)}: {r['errorText']}")
         with contextlib.suppress(Exception):
             info = (await self.cdp.call("Target.getTargetInfo", {"targetId": target_id}, timeout=5))["targetInfo"]
             tab.url = info.get("url") or tab.url
             tab.title = info.get("title") or ""
+            tab.ctx = info.get("browserContextId") or ""
         if activate:
             await self._activate(tab)
         self._send_tabs()
-        log(f"[tabs] window {tab.id} opened ({len(self.tabs)} open)")
+        log(f"[tabs] {'Tor window' if tor else 'window'} {tab.id} opened ({len(self.tabs)} open)")
         return tab
+
+    def _lurl(self, tab: "Tab | None", url: str, n: int = 100) -> str:
+        """A URL for the log: never one of a Tor window (privacy rule: Tor browsing is not written anywhere)."""
+        if tab is not None and tab.tor:
+            return "<Tor window>"
+        return str(url)[:n]
+
+    async def _park(self, target_id: str, sweep: bool = True) -> None:
+        """Keep the real Brave window of a target off-screen (never minimized: that stops the screencast)."""
+        try:
+            w = await self.cdp.call("Browser.getWindowForTarget", {"targetId": target_id}, timeout=5)
+            b = w.get("bounds") or {}
+            state = b.get("windowState", "normal")
+            if state == "fullscreen":
+                # a page's own fullscreen (YouTube's f key, a double-click on a player): Brave put the window
+                # on a monitor and the window guard pushed it straight back. Ending it here would also end the
+                # page's fullscreen; leaving it lets Brave restore the parked bounds when the page exits it.
+                pass
+            else:
+                if state != "normal":
+                    await self.cdp.call("Browser.setWindowBounds", {"windowId": w["windowId"],
+                                                                    "bounds": {"windowState": "normal"}}, timeout=5)
+                x = park_x()          # every time: a monitor attached on the left moves the virtual screen
+                if (b.get("left"), b.get("top"), b.get("width"), b.get("height")) != (x, 0, WIN_W, WIN_H):
+                    await self.cdp.call("Browser.setWindowBounds", {"windowId": w["windowId"], "bounds": {
+                        "left": x, "top": 0, "width": WIN_W, "height": WIN_H}}, timeout=5)
+        except Exception:
+            pass                       # the target is already gone, or not a window of its own
+        if sweep:
+            asyncio.create_task(self._off_taskbar())
+
+    async def _off_taskbar(self) -> None:
+        w = win()
+        if HEADLESS or w is None or self.cdp.proc is None:
+            return
+        with contextlib.suppress(Exception):
+            await asyncio.to_thread(w.off_taskbar, self.cdp.proc.pid)
+            n = await asyncio.to_thread(w.sweep, self.cdp.proc.pid, park_x())
+            if n:
+                log(f"[browser] moved {n} Brave window(s) that had come onto the screen back off-screen")
+
+    async def new_tor_tab(self) -> Tab | None:
+        """{"t":"tab","action":"new_tor"}: Brave's own "New private window with Tor" (Alt+Shift+N; CDP cannot
+        create targets in that browser context). The window shows up as a new page target in its own browser
+        context (_browser_event adopts it). Counts towards MAX_TABS."""
+        if HEADLESS:
+            await self.toast("Tor windows need the normal mode (the server was started with --headless)")
+            return None
+        w = win()
+        if w is None or self.cdp.proc is None:
+            await self.toast("Tor windows only work on Windows")
+            return None
+        if len(self.tabs) + self.tor_wanted >= MAX_TABS:
+            await self.toast(f"Up to {MAX_TABS} windows: close one first")
+            return None
+        n0 = len([t for t in self.tabs.values() if t.tor])
+        pid = self.cdp.proc.pid
+        prev = w.u.GetForegroundWindow()          # the user's window: it gets the focus back afterwards
+        self.tor_wanted += 1
+        try:
+            for attempt in range(2):
+                self.tor_wanted_until = time.monotonic() + TOR_WAIT + 2
+                self.tor_arrived.clear()
+                err = await asyncio.to_thread(w.tor_hotkey, pid)
+                if err:
+                    log(f"[tabs] Tor window: {err}")
+                else:
+                    with contextlib.suppress(asyncio.TimeoutError):
+                        await asyncio.wait_for(self.tor_arrived.wait(), TOR_WAIT)
+                tors = [t for t in self.tabs.values() if t.tor]
+                if len(tors) > n0:
+                    return tors[-1]
+                log(f"[tabs] no Tor window after Alt+Shift+N (attempt {attempt + 1})")
+            self.tor_wanted = max(0, self.tor_wanted - 1)
+            await self.toast("Brave did not open a Tor window (is Tor disabled in Brave's settings?)")
+            return None
+        finally:
+            # Brave activates the new Tor window some time after the keys: only then give the focus back
+            await asyncio.sleep(0.3)
+            with contextlib.suppress(Exception):
+                await asyncio.to_thread(w.restore_focus, prev, pid)
+
+    async def _new_tor_task(self) -> None:
+        self.tor_busy = True
+        try:
+            await self.new_tor_tab()
+        except Exception as e:
+            log(f"[tabs] Tor window failed: {e!r}")
+        finally:
+            self.tor_busy = False
+
+    async def _adopt_tor(self, tid: str, url: str) -> None:
+        try:
+            tab = await self._open_tab(url or "about:blank", target_id=tid, tor=True)
+        except Exception as e:
+            log(f"[tabs] could not adopt the Tor window: {e!r}")
+            return
+        finally:
+            self.tor_arrived.set()
+        if any(t.tor and t.tor_state == "ready" for t in self.tabs.values()):
+            tab.tor_state = "ready"                    # Tor is already up (one Tor process for all Tor windows)
+            self._send_tabs()
+            await self.toast("Tor window opened")
+            return
+        await self.toast("Tor window: connecting to Tor (can take 10-30 s the first time)")
+        asyncio.create_task(self._tor_watch(tab))
+
+    async def _tor_watch(self, tab: Tab) -> None:
+        """'connecting' until Brave's Tor start page says "Tor connected successfully" or any http(s) page
+        loaded in the window (_tor_ready from frameStoppedLoading). Brave starts Tor when the window opens;
+        nothing is requested or navigated here."""
+        js = ("(() => { const f = (n) => { let t = ''; for (const e of n.querySelectorAll('*')) if (e.shadowRoot) "
+              "t += ' ' + f(e.shadowRoot); return ((n.body || n).innerText || '') + t; }; return f(document); })()")
+        end = time.monotonic() + 600
+        while tab.id in self.tabs and tab.tor_state == "connecting" and time.monotonic() < end:
+            if tab.session and not tab.url.startswith("http"):
+                r = await self._safe("Runtime.evaluate", {"expression": js, "returnByValue": True},
+                                     session=tab.session, timeout=5)
+                text = str(((r or {}).get("result") or {}).get("value") or "")
+                if re.search(r"tor connected|(?<!dis)connected to tor", text, re.I):      # Brave's Tor start page
+                    self._tor_ready(tab)
+                    break
+            await asyncio.sleep(1.5)
+
+    def _tor_ready(self, tab: Tab) -> None:
+        if tab.tor and tab.tor_state != "ready":
+            tab.tor_state = "ready"
+            log(f"[tabs] Tor window {tab.id}: connected")
+            self._send_tabs()
+            if tab.id == self.active:
+                asyncio.create_task(self.toast("Connected to Tor"))
 
     async def new_tab(self) -> Tab | None:
         """{"t":"tab","action":"new"} / typing window: a new about:blank window, activated."""
@@ -723,9 +1177,10 @@ class VRBrowser:
                                            timeout=5))     # no hidden sound from the window we left
             if was_casting:
                 asyncio.create_task(self._safe("Page.stopScreencast", session=old.session))
-        with contextlib.suppress(Exception):
-            await self.cdp.call("Target.activateTarget", {"targetId": tab.target}, timeout=5)
-        await self._safe("Page.bringToFront", session=tab.session, timeout=5)
+        if HEADLESS:   # a real window would try to come to the front (focus steal / flashing); CDP input needs no focus
+            with contextlib.suppress(Exception):
+                await self.cdp.call("Target.activateTarget", {"targetId": tab.target}, timeout=5)
+            await self._safe("Page.bringToFront", session=tab.session, timeout=5)
         await self.update_cast()
         await self._history(tab)
 
@@ -775,17 +1230,46 @@ class VRBrowser:
             await self._activate(self.tabs[nxt])
         self._send_tabs()
 
-    async def _hook(self, s: str) -> None:
+    async def _hook(self, s: str, tor: bool = False) -> None:
+        """HOOK_JS + bindings in every document of a session. In a Tor window they live in an isolated world
+        (VRB_WORLD): same DOM and events, but the page cannot see any __vrb* name (a marker no other Tor user
+        has would let sites recognise this user across Tor circuits)."""
         await self.cdp.call("Runtime.enable", session=s)         # bindings survive navigations only with this
-        await self.cdp.call("Runtime.addBinding", {"name": "__vrbPlay"}, session=s)
-        await self.cdp.call("Runtime.addBinding", {"name": "__vrbFocus"}, session=s)
+        world = {"worldName": VRB_WORLD} if tor else {}
+        for name in ("__vrbPlay", "__vrbFocus"):
+            await self.cdp.call("Runtime.addBinding", {"name": name, **(
+                {"executionContextName": VRB_WORLD} if tor else {})}, session=s)
         try:
-            await self.cdp.call("Page.addScriptToEvaluateOnNewDocument", {"source": HOOK_JS, "runImmediately": True},
-                                session=s)
+            await self.cdp.call("Page.addScriptToEvaluateOnNewDocument",
+                                {"source": HOOK_JS, "runImmediately": True, **world}, session=s)
         except Exception:
-            await self.cdp.call("Page.addScriptToEvaluateOnNewDocument", {"source": HOOK_JS}, session=s)
+            await self.cdp.call("Page.addScriptToEvaluateOnNewDocument", {"source": HOOK_JS, **world}, session=s)
         with contextlib.suppress(Exception):
-            await self.cdp.call("Runtime.evaluate", {"expression": HOOK_JS}, session=s, timeout=5)
+            await self._eval(s, HOOK_JS, tor=tor)
+
+    async def _eval(self, s: str, expr: str, tor: bool | None = None, **kw) -> dict | None:
+        """Runtime.evaluate (returnByValue) in a session's page; for a Tor window in its isolated VRB_WORLD
+        (where HOOK_JS lives there), so nothing of ours is visible to the page's own scripts."""
+        if tor is None:
+            tab = self.sess_tab.get(s)
+            tor = tab is not None and tab.tor
+        params = {"expression": expr, "returnByValue": True, **kw}
+        if tor:
+            ctx = await self._world(s)
+            if not ctx:
+                return None
+            params["contextId"] = ctx
+        return await self._safe("Runtime.evaluate", params, session=s, timeout=5)
+
+    async def _world(self, s: str) -> int:
+        """executionContextId of VRB_WORLD in the session's main frame (Brave reuses the world by name)."""
+        ft = await self._safe("Page.getFrameTree", session=s, timeout=5)
+        fid = (((ft or {}).get("frameTree") or {}).get("frame") or {}).get("id")
+        if not fid:
+            return 0
+        r = await self._safe("Page.createIsolatedWorld", {"frameId": fid, "worldName": VRB_WORLD}, session=s,
+                             timeout=5)
+        return int((r or {}).get("executionContextId") or 0)
 
     async def watchdog(self) -> None:
         """Restart Brave if it crashes; poll titles/URLs of every window (scripts change them without an event)."""
@@ -808,6 +1292,16 @@ class VRBrowser:
                         t.url, t.title = ti.get("url", t.url), ti.get("title", t.title)
                 self._info()
                 self._send_tabs()
+                if not HEADLESS:
+                    # keep every window parked (a page can resize/move its window) and off the taskbar
+                    for ti in infos:
+                        if ti.get("type") == "page":
+                            await self._park(ti["targetId"], sweep=False)
+                    await self._off_taskbar()
+                    w = win()
+                    if w is not None and not self.tor_busy and self.cdp.proc is not None:
+                        if await asyncio.to_thread(w.focus_guard, self.cdp.proc.pid):
+                            log("[browser] the hidden Brave had taken the keyboard focus: given back")
 
     async def shutdown(self) -> None:
         if self.resolve_task:
@@ -821,9 +1315,23 @@ class VRBrowser:
             tid = info.get("targetId", "")
             if info.get("type") != "page" or tid in self.adopted:
                 return
+            if method == "Target.targetCreated" and not HEADLESS:
+                asyncio.create_task(self._park(tid))      # every new Brave window goes off-screen at once
             opener = next((t for t in self.tabs.values() if t.target == info.get("openerId")), None)                 or self.frame_tab.get(info.get("openerId", ""))
             if opener is not None and opener.id not in self.tabs:
                 opener = None
+            ctx = info.get("browserContextId") or ""
+            if opener is None and method == "Target.targetCreated" and self.main_ctx and ctx \
+                    and ctx != self.main_ctx:
+                # a window in another browser context that nobody opened from a page: the Tor window we asked for
+                self.adopted.add(tid)
+                if self.tor_wanted > 0 and time.monotonic() < self.tor_wanted_until:
+                    self.tor_wanted -= 1
+                    asyncio.create_task(self._adopt_tor(tid, str(info.get("url") or "")))
+                else:                                     # a second one from a retried Alt+Shift+N
+                    log("[tabs] closed an extra private window nobody asked for")
+                    asyncio.create_task(self._safe("Target.closeTarget", {"targetId": tid}))
+                return
             if opener is None:
                 return
             self.adopted.add(tid)
@@ -845,11 +1353,11 @@ class VRBrowser:
         if time.monotonic() - self.last_click > 2:
             with contextlib.suppress(Exception):
                 await self.cdp.call("Target.closeTarget", {"targetId": tid})
-            log(f"[tabs] closed a popup nobody asked for ({url[:80] or 'about:blank'})")
+            log(f"[tabs] closed a popup nobody asked for ({self._lurl(opener, url, 80) or 'about:blank'})")
             return
         if len(self.tabs) < MAX_TABS:
             try:
-                await self._open_tab(url or "about:blank", target_id=tid)
+                await self._open_tab(url or "about:blank", target_id=tid, tor=opener.tor)
             except Exception as e:
                 log(f"[tabs] could not adopt the popup: {e!r}")
                 return
@@ -917,6 +1425,8 @@ class VRBrowser:
             self._send_tabs()
         elif method == "Page.frameStoppedLoading" and p.get("frameId") == tab.target:
             tab.loading = False
+            if tab.tor and tab.tor_state == "connecting" and tab.url.startswith(("http://", "https://")):
+                self._tor_ready(tab)                   # a page loaded through Tor (errors are chrome-error://)
             if active:
                 self._info()
                 if self.want_cast and not self.casting:
@@ -931,8 +1441,10 @@ class VRBrowser:
             asyncio.create_task(self._history(tab))
             self._maybe_cancel_resolve()
         self._send_tabs()
-        if _is_watch_url(tab.url) and self.resolver.want_prefetch(tab.url):
-            asyncio.create_task(self.resolver.prefetch(tab.url, lambda: self._cookies(YT_COOKIE_URLS)))
+        # never for a Tor window: yt-dlp runs on the laptop's own connection (would leak the real IP)
+        if not tab.tor and _is_watch_url(tab.url) and self.resolver.want_prefetch(tab.url):
+            s = tab.session
+            asyncio.create_task(self.resolver.prefetch(tab.url, lambda: self._cookies(YT_COOKIE_URLS, s)))
 
     def _maybe_cancel_resolve(self) -> None:
         """The page moved on (YouTube SPA click, link, history) while a video was being fetched for
@@ -946,7 +1458,7 @@ class VRBrowser:
         else:
             moved = self.url.split("#")[0] != self.resolve_top.split("#")[0]
         if moved:
-            self._cancel_resolve(f"page changed to {self.url[:80]}")
+            self._cancel_resolve(f"page changed to {self._lurl(self.tab, self.url, 80)}")
 
     def _cancel_resolve(self, why: str) -> None:
         log(f"[video] {why} while getting a video ready: cancelled")
@@ -970,7 +1482,7 @@ class VRBrowser:
                 self.sess_tab[child] = tab
                 if info.get("targetId"):
                     self.frame_tab[info["targetId"]] = tab
-                await self._hook(child)
+                await self._hook(child, tab.tor)
                 await self.cdp.call("Target.setAutoAttach", {"autoAttach": True, "waitForDebuggerOnStart": True,
                                                              "flatten": True}, session=child)
         except Exception:
@@ -1051,7 +1563,8 @@ class VRBrowser:
     def _tabs_msg(self) -> dict:
         return {"t": "tabs", "active": self.active, "max": MAX_TABS,
                 "list": [{"id": t.id, "title": ("New window" if t.url in ("", "about:blank") else t.title or t.url)[:200],
-                          "url": t.url[:2000], "loading": t.loading} for t in self.tabs.values() if t.session]}
+                          "url": t.url[:2000], "loading": t.loading, "tor": t.tor,
+                          **({"torState": t.tor_state} if t.tor else {})} for t in self.tabs.values() if t.session]}
 
     def _send_tabs(self) -> None:
         msg = self._tabs_msg()
@@ -1136,7 +1649,7 @@ class VRBrowser:
             await self.leave_video(None)
         r = await self._safe("Page.navigate", {"url": url}, session=session)
         if r and r.get("errorText"):
-            log(f"[browser] navigate {url}: {r['errorText']}")
+            log(f"[browser] navigate {self._lurl(self.sess_tab.get(session or self.session), url)}: {r['errorText']}")
 
     async def nav(self, to: str) -> None:
         if to in ("back", "forward", "reload") and self.mode != "browse":
@@ -1212,6 +1725,11 @@ class VRBrowser:
             tid = tid if isinstance(tid, str) and len(tid) <= 10 else None
             if act == "new":
                 await self.new_tab()
+            elif act == "new_tor":                      # not inline: Brave can take seconds (input stays live)
+                if self.tor_busy:
+                    await self.toast("Already opening a Tor window...")
+                else:
+                    asyncio.create_task(self._new_tor_task())
             elif act == "switch" and tid:
                 await self.switch_tab(tid)
             elif act == "close":
@@ -1309,6 +1827,7 @@ class VRBrowser:
         if not isinstance(d, dict):
             return
         tab = self.sess_tab.get(sid)
+        lpage = self._lurl(tab, str(d.get("page", "")), 100)        # what the log may show of the page
         if tab is not None and tab.id != self.active:
             asyncio.create_task(self._safe("Runtime.evaluate", {"expression": PAUSE_JS}, session=sid, timeout=5))
             log(f"[video] play ignored (background window {tab.id}), paused it")
@@ -1320,7 +1839,7 @@ class VRBrowser:
         from video_resolve import is_youtube, youtube_id
         why = None
         if self.mode == "resolving" and user and _video_key(d) != self.resolve_key:
-            log(f"[video] another video was started while getting one ready: switching to {page[:80]}")
+            log(f"[video] another video was started while getting one ready: switching to {lpage[:80]}")
             d["session"] = sid
             self.start_resolve(d)
             return
@@ -1346,18 +1865,17 @@ class VRBrowser:
             elif int(d.get("area") or 0) < 200 * 120 and not user:
                 why = "tiny video"
         if why:
-            log(f"[video] play ignored ({why}): {page[:80]}")
+            log(f"[video] play ignored ({why}): {lpage[:80]}")
             return
         d["session"] = sid
-        log(f"[video] play detected: {page[:100]} ({'user' if user else 'auto'}, t={float(d.get('t') or 0):.1f}s)")
+        log(f"[video] play detected: {lpage} ({'user' if user else 'auto'}, t={float(d.get('t') or 0):.1f}s)")
         self.start_resolve(d)
 
     async def manual_trigger(self) -> None:
         """X button / 'Play in VR': whatever video this page has (or just the page URL)."""
         found = None
         for sid in [self.session, *self.children]:
-            r = await self._safe("Runtime.evaluate", {"expression": "window.__vrbInfo ? __vrbInfo() : null",
-                                                      "returnByValue": True}, session=sid, timeout=5)
+            r = await self._eval(sid, "window.__vrbInfo ? __vrbInfo() : null")
             val = ((r or {}).get("result") or {}).get("value")
             if val:
                 with contextlib.suppress(ValueError):
@@ -1374,7 +1892,7 @@ class VRBrowser:
                 and _video_key(found) == self.resolve_key:
             await self.toast("Still getting this video ready...")
             return
-        log(f"[video] manual VR request on {found.get('page', '')[:100]}")
+        log(f"[video] manual VR request on {self._lurl(self.sess_tab.get(found.get('session', '')) or self.tab, found.get('page', ''))}")
         self.start_resolve(found)
 
     def start_resolve(self, d: dict) -> None:
@@ -1388,8 +1906,12 @@ class VRBrowser:
         self.resolve_task = asyncio.create_task(self._resolve(d))
 
     # ---------------------------------------------------------------- video: resolution (A3)
-    async def _cookies(self, urls: list[str]) -> list[dict]:
-        r = await self._safe("Network.getCookies", {"urls": [u for u in urls if u.startswith("http")]})
+    async def _cookies(self, urls: list[str], session: str | None = None) -> list[dict]:
+        s = session or self.session
+        tab = self.sess_tab.get(s)
+        if tab is None or tab.tor:          # never export cookies of a Tor window's browser context
+            return []
+        r = await self._safe("Network.getCookies", {"urls": [u for u in urls if u.startswith("http")]}, session=s)
         return list((r or {}).get("cookies") or [])
 
     async def _resolve(self, d: dict) -> None:
@@ -1400,6 +1922,12 @@ class VRBrowser:
         title = re.sub(r"^\(\d+\)\s*", "", title)          # YouTube's "(3) " notification counter
         title = re.sub(r"\s*-\s*YouTube$", "", title)
         start = float(d.get("t") or 0)
+        vt = self.sess_tab.get(self.video_session) or self.tab
+        if vt.tor:
+            # Tor window: no yt-dlp, no direct fetch, no /media proxy (all of them use the laptop's own
+            # connection and would show the real IP). The browser plays it on the cinema screen instead.
+            await self._screen(title, tor=True)
+            return
         if d.get("ad") or (start < 1.0 and youtube_start(page)):
             start = youtube_start(page) or 0.0          # YouTube seeks to &t= only after 'play' fires
         t_play = time.monotonic()
@@ -1829,21 +2357,50 @@ class VRBrowser:
         r = await self._safe("Runtime.evaluate", {"expression": expr, "returnByValue": True}, session=sid, timeout=5)
         return ((r or {}).get("result") or {}).get("value") is True
 
-    async def _screen(self, title: str) -> None:
+    async def _screen(self, title: str, tor: bool = False) -> None:
         self.mode = "screen"
         msg = {"t": "video", "state": "screen", "title": title}
         self.video_msg = msg
         self.suppress_until = time.monotonic() + 3
         await self.broadcast(msg)
         await self.update_cast()
-        js = ("(() => { const v = window.__vrbMain && __vrbMain(); if (!v) return false;"
-              " try { v.play(); } catch (_) {}"
-              " try { if (!document.fullscreenElement && v.requestFullscreen) v.requestFullscreen(); } catch (_) {}"
-              " return true; })()")
-        await self._safe("Runtime.evaluate", {"expression": js, "userGesture": True, "awaitPromise": False},
-                         session=self.video_session, timeout=5)
-        await self.toast("Showing the browser picture on the big screen - the sound plays on the laptop")
-        log(f"[video] SCREEN mode: {title[:60]}")
+        if HEADLESS:
+            fs = " try { if (!document.fullscreenElement && v.requestFullscreen) v.requestFullscreen(); } catch (_) {}"
+        else:      # requestFullscreen would put the hidden window on the laptop's monitor
+            fs = f" ({PSEUDO_FS_FN}).call(v, true);"
+        js = (f"(() => {{ const v = {MAIN_VIDEO_JS}; if (!v) return false;"
+              f" try {{ v.play(); }} catch (_) {{}} {fs} return true; }})()")
+        sid = self.video_session or self.session
+        await self._eval(sid, js, userGesture=True, awaitPromise=False)
+        if not HEADLESS:
+            await self._pseudo_fs_owner(sid, True)
+        if tor:
+            await self.toast("Tor window: the video plays in the browser on the big screen (streaming it to the "
+                             "phone would bypass Tor) - the sound plays on the laptop")
+            log("[video] SCREEN mode (Tor window, no lookup)")
+        else:
+            await self.toast("Showing the browser picture on the big screen - the sound plays on the laptop")
+            log(f"[video] SCREEN mode: {title[:60]}")
+
+    async def _pseudo_fs_owner(self, sid: str, on: bool) -> None:
+        """Screen mode for a video in an iframe (an embedded player, its own session): the <iframe> element in
+        the window's top page fills the page too (one level of nesting; best effort)."""
+        tab = self.sess_tab.get(sid)
+        if tab is None or sid == tab.session or not tab.session:
+            return
+        if not on:
+            await self._eval(tab.session, f"({PSEUDO_FS_FN}).call(document.documentElement, false)")
+            return
+        with contextlib.suppress(Exception):
+            ft = await self.cdp.call("Page.getFrameTree", session=sid, timeout=5)
+            fid = ft["frameTree"]["frame"]["id"]
+            own = await self.cdp.call("DOM.getFrameOwner", {"frameId": fid}, session=tab.session, timeout=5)
+            rp: dict = {"backendNodeId": own["backendNodeId"]}
+            if tab.tor:
+                rp["executionContextId"] = await self._world(tab.session)
+            obj = (await self.cdp.call("DOM.resolveNode", rp, session=tab.session, timeout=5))["object"]
+            await self.cdp.call("Runtime.callFunctionOn", {"objectId": obj["objectId"], "functionDeclaration":
+                                PSEUDO_FS_FN, "arguments": [{"value": True}]}, session=tab.session, timeout=5)
 
     async def leave_video(self, at, origin: "Client | None" = None) -> None:
         if self.resolve_task and not self.resolve_task.done():
@@ -1853,7 +2410,7 @@ class VRBrowser:
         self.video_msg = None
         self.cur_play = None
         self.suppress_until = time.monotonic() + 2.5
-        js = "(() => { const v = window.__vrbMain && __vrbMain(); if (!v) return false;"
+        js = f"(() => {{ ({PSEUDO_FS_FN}).call(document.documentElement, false); const v = {MAIN_VIDEO_JS}; if (!v) return false;"
         try:
             t = float(at) if at is not None else None
         except (TypeError, ValueError):
@@ -1863,8 +2420,10 @@ class VRBrowser:
         js += (" try { v.pause(); } catch (_) {}"
                " try { if (document.fullscreenElement) document.exitFullscreen(); } catch (_) {} return true; })()")
         if was != "browse":
-            await self._safe("Runtime.evaluate", {"expression": js, "userGesture": True},
-                             session=self.video_session or self.session, timeout=5)
+            sid = self.video_session or self.session
+            await self._eval(sid, js, userGesture=True)
+            if not HEADLESS and was == "screen":
+                await self._pseudo_fs_owner(sid, False)
             log(f"[video] back to the browser (from {was}{'' if t is None else f', at {t:.1f}s'})")
             # every phone (except the one whose B started this) must leave VR too
             for c in list(self.clients):
@@ -1898,7 +2457,7 @@ class VRBrowser:
     def status_line(self) -> str:
         ids = list(self.tabs)
         win = f"window {ids.index(self.active) + 1}/{len(ids)}" if self.active in ids else "no window"
-        return f"{len(self.clients)} phone(s) | {win} | {self.mode} | {self.title or self.url}"
+        return f"{len(self.clients)} phone(s) | {win} | {self.mode} | "                + ("Tor window" if self.tab.tor else (self.title or self.url))
 
 
 def _video_key(d: dict) -> str:
@@ -2339,8 +2898,9 @@ def login_mode() -> int:
     print("  Sign in to YouTube (and any other site you want), then CLOSE that window.")
     print("  The VR browser keeps you signed in after that.")
     print("=" * 64, flush=True)
-    p = subprocess.Popen([str(BRAVE), f"--user-data-dir={PROFILE}", "--no-first-run",
-                          "--no-default-browser-check", HOME_URL])
+    # explicit position: the server parks this profile's windows off-screen and Brave remembers that place
+    p = subprocess.Popen([str(BRAVE), f"--user-data-dir={PROFILE}", "--no-first-run", "--window-position=80,60",
+                          "--window-size=1280,860", "--no-default-browser-check", HOME_URL])
     p.wait()
     # Brave can hand over to a child and exit early; wait until nothing uses the profile any more
     while profile_users():
@@ -2353,7 +2913,8 @@ def login_mode() -> int:
 def print_banner(urls: list[str]) -> None:
     line = "=" * 70
     print(line)
-    print("  VR BROWSER TEST   (headless Brave -> phone headset)")
+    print("  VR BROWSER TEST   (hidden Brave -> phone headset)" if not HEADLESS else
+          "  VR BROWSER TEST   (headless Brave -> phone headset)")
     print(line)
     if not urls:
         print("  !! No Wi-Fi IPv4 found. Is the laptop on Wi-Fi? Try --ip 192.168.x.y")
@@ -2461,7 +3022,14 @@ def main() -> None:
     ap.add_argument("--zoom", type=float, default=1.25, help="page zoom (bigger text, fewer columns)")
     ap.add_argument("--login", action="store_true", help="open a normal Brave window to sign in once")
     ap.add_argument("--no-keyboard", action="store_true", help="do not open the laptop typing window")
+    ap.add_argument("--headless", action="store_true",
+                    help="old mode: headless Brave instead of the hidden off-screen window (no Tor windows)")
+    ap.add_argument("--profile", help="Brave profile folder (default vr_browser_test/profile; for tests)")
     args = ap.parse_args()
+    global HEADLESS, PROFILE
+    HEADLESS = bool(args.headless)
+    if args.profile:
+        PROFILE = Path(args.profile).resolve()
     with contextlib.suppress(Exception):
         sys.stdout.reconfigure(line_buffering=True, errors="replace")
     sys.path.insert(0, str(HERE))
