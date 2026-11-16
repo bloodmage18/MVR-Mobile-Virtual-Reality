@@ -873,8 +873,10 @@ function showBlankPlaceholder() { drawPlaceholder("New window", "Type an address
 function decodeFrame(data) {
   decoding = true;
   const blob = data instanceof Blob ? data : new Blob([data], {type: "image/jpeg"});
+  const d0 = performance.now();
   const done = () => {
     decoding = false;
+    perf.dec += performance.now() - d0; perf.decN++; perf.page++;
     if (pendingBlob) { const b = pendingBlob; pendingBlob = null; decodeFrame(b); }
   };
   const put = (src, w, h) => {
@@ -2570,8 +2572,66 @@ function setStereo(on) {
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
+// ── Round A: performance samples (sent to the laptop's perf.log) + adaptive render scale ──────────────
+// When the phone can't keep up (heat, a heavy video), it renders fewer pixels instead of dropping frames:
+// scale 1 -> 0.85 -> 0.72 -> 0.6, and back up after a long good spell. ?scale=0.8 fixes it (no adapting).
+const SCALE_STEPS = [1, 0.85, 0.72, 0.6];
+const SCALE_FIXED = parseFloat(PARAMS.get("scale") || "0") || 0;
+const perf = {i: 0, bad: 0, good: 0, upWait: 30, lastUpAt: -1e9, hz: 0, lastRaf: 0,
+              frames: 0, js: 0, jsMax: 0, long: 0, ivs: [], dec: 0, decN: 0, page: 0, vq: null, t0: performance.now()};
+let battery = null;
+try { if (navigator.getBattery) navigator.getBattery().then((b) => { battery = b; }).catch(() => {}); } catch (_) {}
+function renderScale() { return SCALE_FIXED || SCALE_STEPS[perf.i]; }
+function perfSecond(fps) {                         // once a second: adapt the render scale
+  if (document.hidden || fps < 5) return;
+  const hz = fps > 100 ? 120 : fps > 75 ? 90 : 60;   // the screen's refresh = the best second seen
+  if (hz > perf.hz) perf.hz = hz;
+  if (SCALE_FIXED || DPR_OVERRIDE) return;
+  const now = performance.now();
+  if (fps < 0.85 * perf.hz) { perf.bad++; perf.good = 0; perf.badSum = (perf.badSum || 0) + fps; }
+  else if (fps >= 0.95 * perf.hz) { perf.good++; perf.bad = 0; perf.badSum = 0; perf.stuck = false; }
+  if (perf.bad >= 4 && perf.stuck) { perf.bad = 0; perf.badSum = 0; return; }
+  if (perf.bad >= 4 && perf.downFps && perf.badSum / perf.bad <= perf.downFps * 1.05) {
+    // Fewer pixels did not help: the limit is not drawing (battery saver's 60 Hz cap, a busy main thread).
+    // Undo that step and stop lowering until the phone reaches full speed again.
+    perf.i = Math.max(0, perf.i - 1); perf.stuck = true; perf.downFps = 0; perf.bad = 0; perf.badSum = 0;
+    return;
+  }
+  if (perf.bad >= 4 && perf.i < SCALE_STEPS.length - 1) {
+    if (now - perf.lastUpAt < 15000) perf.upWait = Math.min(240, perf.upWait * 2);   // going up didn't hold
+    perf.downFps = perf.badSum / perf.bad;
+    perf.i++; perf.bad = 0; perf.good = 0; perf.badSum = 0;
+    console.warn("render scale down to " + SCALE_STEPS[perf.i] + " (" + fps + " fps of " + perf.hz + ")");
+  } else if (perf.good >= perf.upWait && perf.i > 0) {
+    perf.i--; perf.good = 0; perf.bad = 0; perf.lastUpAt = now; perf.downFps = 0;
+  }
+}
+function sendPerf() {                              // every 5 s
+  const n = perf.frames, iv = perf.ivs.sort((a, b) => a - b);
+  const r = (x, d) => Math.round(x * (d || 1)) / (d || 1);
+  const m = {t: "perf", up: r((performance.now() - perf.t0) / 1000), fps: r(n / 5, 10), hz: perf.hz,
+             js: n ? r(perf.js / n, 10) : 0, jsmax: r(perf.jsMax, 10), long: perf.long,
+             p95: iv.length ? r(iv[Math.floor(iv.length * 0.95)], 10) : 0,
+             page: r(perf.page / 5, 10), dec: perf.decN ? r(perf.dec / perf.decN, 10) : 0,
+             scale: renderScale(), w: canvas.width, h: canvas.height, mode: state.mode, proj: state.proj || "",
+             stereo: !!state.stereo};
+  if (state.mode === "vr" && video.videoWidth) m.vres = video.videoWidth + "x" + video.videoHeight;
+  try {
+    const q = video.getVideoPlaybackQuality && video.getVideoPlaybackQuality();
+    if (q) {
+      if (perf.vq) { m.vdrop = q.droppedVideoFrames - perf.vq.d; m.vtot = q.totalVideoFrames - perf.vq.t; }
+      perf.vq = {d: q.droppedVideoFrames, t: q.totalVideoFrames};
+    }
+  } catch (_) {}
+  if (performance.memory) m.heap = r(performance.memory.usedJSHeapSize / 1048576);
+  if (battery) { m.bat = r(battery.level * 100); m.chg = !!battery.charging; }
+  perf.frames = 0; perf.js = 0; perf.jsMax = 0; perf.long = 0; perf.ivs = []; perf.dec = 0; perf.decN = 0; perf.page = 0;
+  if (!document.hidden) send(m);
+}
+setInterval(sendPerf, 5000);
+
 function resize() {
-  const dpr = DPR_OVERRIDE || Math.min(window.devicePixelRatio || 1, state.stereo ? 3 : 2);   // B3
+  const dpr = (DPR_OVERRIDE || Math.min(window.devicePixelRatio || 1, state.stereo ? 3 : 2)) * renderScale();   // B3
   curDpr = dpr;
   const w = Math.round((canvas.clientWidth || innerWidth) * dpr), h = Math.round((canvas.clientHeight || innerHeight) * dpr);
   if (canvas.width !== w || canvas.height !== h) {
@@ -2707,6 +2767,10 @@ const FPS_CAP = parseFloat(PARAMS.get("fpscap") || "0") || 0;
 function frame(t) {
   requestAnimationFrame(frame);
   if (FPS_CAP && t - lastT < 1000 / FPS_CAP - 2) return;
+  if (lastT && perf.ivs.length < 2000) {
+    const iv = t - lastT; perf.ivs.push(iv);
+    if (iv > 1.5 * 1000 / (perf.hz || 60)) perf.long++;     // a frame the screen had to show twice (or more)
+  }
   const dt = Math.min(0.1, Math.max(0, (t - lastT) / 1000)); lastT = t;
   const now = performance.now();
   pollPads(dt);
@@ -2743,6 +2807,8 @@ function frame(t) {
     drawEye(R, 0, 0, 0, 0, W, Hh, currentFovy(), 0, now);
   }
   state.frames++;
+  const js = performance.now() - now;             // CPU time of this frame (the GPU work shows up as low fps)
+  perf.frames++; perf.js += js; if (js > perf.jsMax) perf.jsMax = js;
 }
 
 // ── 2D HUD / hints (debug, outside the headset) ────────────────────────────
@@ -2775,9 +2841,10 @@ function debugLine4() {
 }
 setInterval(() => {
   state.fps = state.frames; state.frames = 0;
+  perfSecond(state.fps);
   sensorHz = orientEvents; orientEvents = 0;
   const fr = state.panelFrames; state.panelFrames = 0;
-  const txt = `${state.fps} fps  ${state.stereo ? "STEREO" : "MONO"}  ${state.mode}\n` +
+  const txt = `${state.fps} fps${perf.hz ? " of " + perf.hz : ""}  scale ${renderScale()}  ${state.stereo ? "STEREO" : "MONO"}  ${state.mode}\n` +
               `${state.source}${sensorHz ? "  " + sensorHz + " Hz" : ""}\n` +
               `laptop: ${state.link}  page ${fr}/s\n` + debugLine4() + "\n" + padSource().text;
   hudL.textContent = txt; hudR.textContent = txt;

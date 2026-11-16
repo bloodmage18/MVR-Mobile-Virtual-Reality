@@ -97,6 +97,18 @@ Brave's own **"New private window with Tor"** (the same as Alt+Shift+N in Brave)
   protected video, the phone shows the live browser picture on the cinema screen and the **sound plays on the laptop**.
 - When you go back with B, the browser video jumps to where you stopped watching.
 
+## Performance (low-end phones)
+
+- **Auto resolution:** when the phone can't keep up (it gets warm, or a heavy video plays), it draws fewer
+  pixels (scale 1 -> 0.85 -> 0.72 -> 0.6) instead of stuttering, and goes back up after a long smooth spell.
+  If fewer pixels don't help (battery saver's 60 Hz cap), it changes nothing. `?scale=0.8` in the address
+  fixes the scale.
+- **Background windows pause:** 15 s after you leave a window it is paused on the laptop (its scripts and
+  animations stop); it wakes up when you switch back. `--no-freeze` keeps them running.
+- **Measurements:** the phone sends a sample every 5 s to `vr_browser_test\perf.log` (fps, the screen's refresh
+  rate, render scale, frame times, video frames dropped, battery, laptop CPU, Brave memory, windows open/paused),
+  and the server window prints a `[perf]` line every minute. The debug HUD shows "fps of Hz" and the scale.
+
 ## Troubleshooting
 
 - **"Port 8443 is already in use"**: `phone_host_test.bat` (or another copy of this server) is still open. Close it.

@@ -23,3 +23,4 @@ home_space/service/cache/
 # VR browser test: Brave profile (login cookies) and downloaded videos
 vr_browser_test/profile/
 vr_browser_test/cache/
+vr_browser_test/perf.log

@@ -69,6 +69,9 @@ MEDIA_MAX = 40
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 HEADLESS = False                         # --headless: the old mode (no real window, no Tor windows)
 WIN_W, WIN_H = 1400, 900                 # real (off-screen) Brave windows: the page area is bigger than W/zoom x H/zoom
+FREEZE = True                            # --no-freeze: keep background windows running
+FREEZE_AFTER = 15.0                      # seconds after leaving a window before it is frozen
+PERF_LOG = HERE / "perf.log"             # phone performance samples (JSON lines), see "perf" messages
 TOR_WAIT = 12.0                          # seconds Brave may take to open a Tor window after Alt+Shift+N
 
 sys.path.append(str(PHONE_HOST))         # pad_relay
@@ -728,6 +731,7 @@ class Client:
         self.frames = 0
         self.caps: dict | None = None             # G2 "caps" (sanitized)
         self.caps_t = 0.0
+        self.perf_logged = 0.0                    # Round A: last console [perf] line
 
     async def text(self, obj: dict) -> None:
         if not self.alive:
@@ -787,6 +791,8 @@ class Tab:
         self.ctx = ""                    # CDP browserContextId
         self.tor = False                 # Brave's "Private window with Tor" (its own browser context)
         self.tor_state = ""              # tor: "connecting" until a page loaded through Tor, then "ready"
+        self.frozen = False              # Page.setWebLifecycleState frozen while in the background
+        self.freeze_task: asyncio.Task | None = None
 
 
 FOCUS_INPUTS = ("text", "search", "email", "url", "password", "tel", "number", "textarea", "contenteditable")
@@ -1158,6 +1164,7 @@ class VRBrowser:
         """F4: make tab the one the phone sees and controls."""
         if tab.id not in self.tabs:
             return
+        await self._thaw(tab)
         if self.mode in ("vr", "screen"):
             await self.leave_video(None)
         elif self.mode == "resolving":
@@ -1177,12 +1184,78 @@ class VRBrowser:
                                            timeout=5))     # no hidden sound from the window we left
             if was_casting:
                 asyncio.create_task(self._safe("Page.stopScreencast", session=old.session))
+            if FREEZE:
+                self._schedule_freeze(old)
         if HEADLESS:   # a real window would try to come to the front (focus steal / flashing); CDP input needs no focus
             with contextlib.suppress(Exception):
                 await self.cdp.call("Target.activateTarget", {"targetId": tab.target}, timeout=5)
             await self._safe("Page.bringToFront", session=tab.session, timeout=5)
         await self.update_cast()
         await self._history(tab)
+
+    async def _thaw(self, tab: Tab) -> None:
+        """Wake a background window up again (before it is shown or used)."""
+        if tab.freeze_task:
+            tab.freeze_task.cancel()
+            tab.freeze_task = None
+        if tab.frozen:
+            tab.frozen = False
+            if not tab.session:                    # _safe would fall back to the ACTIVE window's session
+                return
+            await self._safe("Page.setWebLifecycleState", {"state": "active"}, session=tab.session, timeout=5)
+
+    def _schedule_freeze(self, tab: Tab) -> None:
+        """Round A: a window left in the background stops running its scripts/animations after FREEZE_AFTER s
+        (its videos were already paused), so 6 open windows cost about as much as 1."""
+        if tab.freeze_task:
+            tab.freeze_task.cancel()
+
+        async def later() -> None:
+            await asyncio.sleep(FREEZE_AFTER)
+            tab.freeze_task = None
+            if (tab.id == self.active or tab.closing or self.tabs.get(tab.id) is not tab or tab.frozen
+                    or not tab.session):
+                return
+            if tab.tor and tab.tor_state != "ready":   # Brave's Tor start page must keep running while it connects
+                return
+            r = await self._safe("Page.setWebLifecycleState", {"state": "frozen"}, session=tab.session, timeout=5)
+            if r is not None:
+                tab.frozen = True
+                log(f"[tabs] window {tab.id} paused in the background")
+        tab.freeze_task = asyncio.create_task(later())
+
+    def _perf(self, client: Client, m: dict) -> None:
+        """Round A: a phone performance sample every 5 s -> perf.log (JSON lines) + a console line every minute."""
+        rec: dict = {"ts": time.strftime("%H:%M:%S"), "ip": client.ip}
+        for k, v in m.items():
+            if k == "t" or not isinstance(k, str) or len(k) > 12 or len(rec) > 40:
+                continue
+            if isinstance(v, bool) or v is None:
+                rec[k] = v
+            elif isinstance(v, (int, float)) and v == v and abs(v) < 1e9:
+                rec[k] = round(float(v), 2)
+            elif isinstance(v, str):
+                rec[k] = _CTRL.sub("", v[:40])
+        try:
+            import psutil
+            rec["lap_cpu"] = psutil.cpu_percent(None)
+            if self.cdp.proc is not None:
+                bp = psutil.Process(self.cdp.proc.pid)
+                rec["brave_mb"] = round(sum(c.memory_info().rss for c in [bp, *bp.children(recursive=True)]) / 2**20)
+        except Exception:
+            pass
+        rec["wins"] = len(self.tabs)
+        rec["frozen"] = sum(1 for t in self.tabs.values() if t.frozen)
+        with contextlib.suppress(Exception):
+            with PERF_LOG.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(rec) + "\n")
+        now = time.monotonic()
+        if now - client.perf_logged >= 60:
+            client.perf_logged = now
+            g = rec.get
+            log(f"[perf] {client.ip} {g('fps')} fps (of {g('hz')}) scale {g('scale')} js {g('js')} ms "
+                f"long {g('long')} page {g('page')}/s dec {g('dec')} ms vdrop {g('vdrop')} heap {g('heap')} MB "
+                f"bat {g('bat')} | laptop cpu {g('lap_cpu')}% brave {g('brave_mb')} MB")
 
     async def switch_tab(self, tid: str) -> None:
         tab = self.tabs.get(tid)
@@ -1758,6 +1831,8 @@ class VRBrowser:
                 log(f"[phone] {client.ip} caps mse={caps['mse']} mtex={caps['mtex']} "
                     + " ".join(f"{k}:{v.get('mse') or v.get('file')}" for k, v in caps["v"].items())
                     + f" aac={caps['a']['aac']} opus={caps['a']['opus']}")
+        elif t == "perf":
+            self._perf(client, m)
         elif t == "proj":
             await self._on_proj(m)
         elif t == "vfail":
@@ -3024,10 +3099,12 @@ def main() -> None:
     ap.add_argument("--no-keyboard", action="store_true", help="do not open the laptop typing window")
     ap.add_argument("--headless", action="store_true",
                     help="old mode: headless Brave instead of the hidden off-screen window (no Tor windows)")
+    ap.add_argument("--no-freeze", action="store_true", help="keep background windows running (no pausing)")
     ap.add_argument("--profile", help="Brave profile folder (default vr_browser_test/profile; for tests)")
     args = ap.parse_args()
-    global HEADLESS, PROFILE
+    global HEADLESS, PROFILE, FREEZE
     HEADLESS = bool(args.headless)
+    FREEZE = not args.no_freeze
     if args.profile:
         PROFILE = Path(args.profile).resolve()
     with contextlib.suppress(Exception):
