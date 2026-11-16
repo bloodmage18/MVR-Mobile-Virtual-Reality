@@ -41,6 +41,10 @@ var _labels: Array[Label] = []
 var _label_timer := 0.0
 var _udp := PacketPeerUDP.new()
 var _send_timer := 0.0
+## Web build on the phone: no bridge, no lens shader on a laptop. Plain side-by-side with the
+## eye separation / FOV the user tuned on the phone test page (same site, so same localStorage).
+var _web := OS.has_feature("web")
+var _web_lens_timer := 0.0
 
 
 func _ready() -> void:
@@ -51,7 +55,10 @@ func _ready() -> void:
 		set_process(false)
 		return
 	_load()
-	_udp.set_dest_address("127.0.0.1", bridge_settings_port)
+	if _web:
+		_apply_web_lens()
+	else:
+		_udp.set_dest_address("127.0.0.1", bridge_settings_port)
 	for i in 2:
 		var vp := SubViewport.new()
 		vp.world_3d = get_viewport().world_3d          # same world as the game
@@ -89,6 +96,12 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if _web:
+		_web_lens_timer -= delta
+		if _web_lens_timer <= 0.0:      # pick up changes made on the page (Lens panel / laptop keys)
+			_web_lens_timer = 2.0
+			if _apply_web_lens():
+				_apply()
 	_send_timer -= delta
 	if _send_timer <= 0.0:          # resend once a second so a reconnecting phone catches up
 		_send_settings()
@@ -187,12 +200,37 @@ func _apply() -> void:
 		_mat.set_shader_parameter(k, s[k])
 	# Immersive mode: the laptop sends the plain wide image; the phone bends it
 	_mat.set_shader_parameter("distortion", s.distortion and not s.lens_on_phone)
+	_mat.set_shader_parameter("plain_shift", s.lens_offset if _web else 0.0)
 	_place_labels()
 	_send_settings()
 
 
+## Returns true when the settings changed.
+func _apply_web_lens() -> bool:
+	var before := [s.lens_offset, s.eye_fov]
+	s.lens_on_phone = false
+	s.distortion = false
+	s.overscan = 1.0
+	var raw = JavaScriptBridge.eval("localStorage.getItem('pvr_lens') || ''", true)
+	var lens = JSON.parse_string(raw) if raw is String and raw != "" else null
+	if lens is Dictionary:
+		s.lens_offset = float(lens.get("offset", s.lens_offset))
+		s.eye_fov = float(lens.get("fov", 80.0))
+	elif before == [DEFAULTS.lens_offset, DEFAULTS.eye_fov]:
+		# JS booleans come back as numbers through JavaScriptBridge, so ask for 1/0
+		var android: bool = int(JavaScriptBridge.eval("/Android/i.test(navigator.userAgent) ? 1 : 0", true)) == 1
+		s.lens_offset = 0.08 if android else 0.0
+		s.eye_fov = 80.0
+	var changed := before != [s.lens_offset, s.eye_fov]
+	if changed:
+		print("[stereo] web lens: separation %.3f fov %d" % [s.lens_offset, int(s.eye_fov)])
+	return changed
+
+
 func _send_settings() -> void:
 	_send_timer = 1.0
+	if _web:
+		return
 	var msg := s.duplicate()
 	msg["stereo"] = enabled
 	msg["render_fov"] = render_fov()

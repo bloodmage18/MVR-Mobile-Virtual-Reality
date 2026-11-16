@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Phone VR Test</title>
+<meta name="theme-color" content="#05070d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Phone VR">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="icon" type="image/png" href="/icon-192.png">
+<style>
+  :root { --bg: #05070d; --fg: #f0f3f8; --muted: #9aa4b2; --accent: #2f81f7; --ok: #7ee787; --warn: #ffb347; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden;
+               touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+               font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  /* No `inset` (Safari < 14.1) and no 100vh (iOS: taller than the visible area with the bars shown,
+     which stretched the picture). The GL buffer is sized from the canvas's real CSS box in resize(). */
+  canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  [hidden] { display: none !important; }
+
+  /* Start screen: everything big, the phone is ~800x720 per eye */
+  #start { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 5; overflow-y: auto; display: flex; flex-direction: column; align-items: center;
+           justify-content: flex-start; gap: 14px; padding: 16px; text-align: center; background: var(--bg); }
+  #start > :first-child { margin-top: auto !important; }    /* centred when it fits, scrollable when it does not */
+  #start > :last-child { margin-bottom: auto !important; }
+  #start h1 { margin: 0; font-size: 30px; }
+  #go { font-size: 40px; font-weight: 800; padding: 26px 54px; border: 0; border-radius: 20px;
+        background: var(--accent); color: #fff; letter-spacing: 1px; }
+  #go:active { transform: scale(.97); }
+  #start p { margin: 0; font-size: 18px; color: var(--muted); max-width: 640px; line-height: 1.4; }
+  #start .warn { color: var(--warn); font-weight: 600; }
+
+  /* HUD: one copy per eye in stereo so it is readable in the headset */
+  .hud { position: fixed; top: 14px; z-index: 3; color: var(--ok); font: 600 17px/1.35 ui-monospace, Menlo, Consolas, monospace;
+         background: rgba(0,0,0,.6); padding: 8px 12px; border-radius: 10px; white-space: pre; pointer-events: none;
+         transform: translateX(-50%); transition: opacity .8s; text-align: center; }
+  .hud.faded { opacity: 0; }
+  #hint { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 4; max-width: 90vw;
+          background: rgba(20,24,34,.92); color: #fff; font-size: 18px; padding: 10px 16px; border-radius: 12px;
+          text-align: center; pointer-events: none; transition: opacity .8s; }
+  #hint.faded { opacity: 0; }
+  #buttons { position: fixed; right: max(8px, env(safe-area-inset-right)); bottom: 8px; z-index: 4; display: flex; gap: 8px;
+             opacity: .45; }
+  #buttons button { font: 600 14px system-ui, sans-serif; padding: 8px 12px; border-radius: 10px; border: 1px solid #556;
+                    background: rgba(10,12,20,.75); color: #dde; }
+  #divider { position: fixed; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: #000; z-index: 2; pointer-events: none; }
+  /* Fusion crosshairs (one per eye, at the lens centre) shown while tuning */
+  .cross { position: fixed; top: 50%; z-index: 3; width: 64px; height: 64px; margin: -32px 0 0 -32px; pointer-events: none; }
+  .cross::before, .cross::after { content: ""; position: absolute; background: #ff3; }
+  .cross::before { left: 31px; top: 0; width: 3px; height: 64px; }
+  .cross::after { top: 31px; left: 0; height: 3px; width: 64px; }
+  #lensPanel { position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%); z-index: 6; background: rgba(12,14,24,.94);
+               color: #eee; padding: 14px 18px; border-radius: 14px; font: 600 16px system-ui, sans-serif; width: min(92vw, 520px); }
+  #lensPanel label { display: block; margin: 6px 0; }
+  #lensPanel input[type=range] { width: 100%; height: 34px; }
+  #lensPanel .row { display: flex; gap: 8px; justify-content: space-between; margin-top: 6px; }
+  #lensPanel button { font: 600 15px system-ui, sans-serif; padding: 8px 12px; border-radius: 10px; border: 1px solid #556; background: #223; color: #dde; }
+  #err { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 9; display: flex; align-items: center; justify-content: center;
+         background: #300; color: #fff; font-size: 22px; padding: 24px; text-align: center; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="divider" hidden></div>
+<div class="cross" id="crossL" hidden></div>
+<div class="cross" id="crossR" hidden></div>
+<div class="hud" id="hudL" hidden></div>
+<div class="hud" id="hudR" hidden></div>
+<div id="hint" class="faded"></div>
+<div id="buttons" hidden>
+  <button id="btnRecenter" type="button">Recenter</button>
+  <button id="btnMode" type="button">Mono</button>
+  <button id="btnLens" type="button">Lens</button>
+</div>
+<div id="lensPanel" hidden>
+  <label>Eye separation (lens offset): <span id="offVal"></span>
+    <input id="offRange" type="range" min="-0.15" max="0.25" step="0.005"></label>
+  <label>Field of view: <span id="fovVal"></span>
+    <input id="fovRange" type="range" min="50" max="110" step="1"></label>
+  <div class="row"><button id="lensReset" type="button">Reset</button><button id="lensClose" type="button">Done</button></div>
+  <div style="font-weight:400;font-size:14px;color:#aab;margin-top:6px">The two yellow crosses must merge into one. With the headset on, tune from the laptop keys [ ] (separation) and - = (FOV), or a controller d-pad paired to the phone.</div>
+</div>
+<div id="start">
+  <h1>Phone VR test</h1>
+  <p id="secureWarn" class="warn" hidden></p>
+  <button id="go" type="button">TAP TO START</button>
+  <a href="/game/" style="font:700 22px system-ui,sans-serif;color:#fff;background:#6b1d1d;padding:14px 26px;border-radius:14px;text-decoration:none">Play the school (horror game)</a>
+  <p>Turn the phone sideways (landscape). After the tap, allow <b>Motion &amp; Orientation</b> if asked.</p>
+  <p>Drag on the screen = turn. Double-tap = recenter. A Bluetooth controller paired to the phone: left stick walks, right stick turns.</p>
+</div>
+<div id="err" hidden></div>
+
+<script>
+"use strict";
+// ═══════════════════════════════════════════════════════════════════════════
+//  Phone-hosted VR test scene. Everything renders HERE on the phone (WebGL1).
+//  The laptop only served this file; the status socket is optional.
+// ═══════════════════════════════════════════════════════════════════════════
+const PARAMS = new URLSearchParams(location.search);
+const AUTOSTART = PARAMS.has("autostart");          // test hook: no tap, no sensors
+const deg = Math.PI / 180;
+const IPD = parseFloat(PARAMS.get("ipd") || "0.063");
+const EYE_H = 1.6;
+
+const canvas = document.getElementById("c");
+const hudL = document.getElementById("hudL"), hudR = document.getElementById("hudR");
+const hintEl = document.getElementById("hint");
+const startEl = document.getElementById("start");
+const btnMode = document.getElementById("btnMode");
+const crossL = document.getElementById("crossL"), crossR = document.getElementById("crossR");
+const lensPanel = document.getElementById("lensPanel");
+const offRange = document.getElementById("offRange"), fovRange = document.getElementById("fovRange");
+
+const state = {
+  stereo: (PARAMS.get("mode") || "stereo") !== "mono",
+  source: "none",            // which sensor drives the head
+  sensorsInfo: "",           // extra notes for the report
+  link: "connecting",
+  fps: 0, frames: 0,
+  gamepad: "",
+  bodyYaw: (parseFloat(PARAMS.get("yaw") || "0")) * deg,
+  yawOffset: 0,
+  pos: [0, 0, 0],
+  H: null,                   // head rotation rows (camera -> world, GL Y-up), null = level
+  needRecenter: true,
+};
+const fixedPitch = parseFloat(PARAMS.get("pitch") || "0") * deg;
+
+// -- Lens fit: per-device eye separation + FOV (saved on this phone) --
+// offset = how far each eye's image centre moves toward the screen middle, as a fraction
+// of that eye's half of the screen (same meaning as lens_offset in the laptop pipeline).
+// Screens wider than the headset's lens spacing (Galaxy A08) need about 0.08; the iPhone 12 fits at 0.
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
+const LENS_DEFAULT = {offset: IS_ANDROID ? 0.08 : 0.0, fov: 80};
+const lens = Object.assign({}, LENS_DEFAULT);
+try { Object.assign(lens, JSON.parse(localStorage.getItem("pvr_lens") || "{}")); } catch (_) {}
+if (PARAMS.has("offset")) lens.offset = parseFloat(PARAMS.get("offset"));
+if (PARAMS.has("fov")) lens.fov = parseFloat(PARAMS.get("fov"));
+let crossTimer = null;
+function setLens(o, show = true) {
+  if (o.reset) Object.assign(lens, LENS_DEFAULT);
+  if (o.offset != null) lens.offset = o.offset;
+  if (o.doffset) lens.offset += o.doffset;
+  if (o.fov != null) lens.fov = o.fov;
+  if (o.dfov) lens.fov += o.dfov;
+  lens.offset = Math.round(Math.min(0.25, Math.max(-0.15, lens.offset)) * 1000) / 1000;
+  lens.fov = Math.min(110, Math.max(50, Math.round(lens.fov)));
+  try { localStorage.setItem("pvr_lens", JSON.stringify({offset: lens.offset, fov: lens.fov})); } catch (_) {}
+  syncLensUi();
+  layoutHud();
+  showCrosses(lensPanel.hidden ? 4000 : 0);
+  if (show) hint(`separation ${lens.offset.toFixed(3)}   fov ${lens.fov}`, 2500);
+}
+function showCrosses(ms) {
+  if (!state.stereo) return;
+  crossL.hidden = false; crossR.hidden = false;
+  clearTimeout(crossTimer);
+  if (ms) crossTimer = setTimeout(() => { if (lensPanel.hidden) { crossL.hidden = true; crossR.hidden = true; } }, ms);
+}
+// Screen-x (0..1) of each eye's image centre
+function eyeCentres() { return [(0.5 + lens.offset) * 0.5, 0.5 + (0.5 - lens.offset) * 0.5]; }
+
+function showError(msg) { const e = document.getElementById("err"); e.textContent = msg; e.hidden = false; }
+window.addEventListener("error", (e) => console.error("Uncaught:", e.message));
+
+// ── WebGL setup ─────────────────────────────────────────────────────────────
+const gl = canvas.getContext("webgl", {antialias: true, alpha: false, powerPreference: "high-performance"}) ||
+           canvas.getContext("experimental-webgl");
+if (!gl) showError("WebGL is not available in this browser.");
+
+const VS = `
+attribute vec3 aPos; attribute vec3 aNor; attribute vec2 aUV;
+uniform mat4 uModel, uVP;
+varying vec3 vWorld; varying vec3 vNor; varying vec2 vUV;
+void main() {
+  vec4 w = uModel * vec4(aPos, 1.0);
+  vWorld = w.xyz; vNor = (uModel * vec4(aNor, 0.0)).xyz; vUV = aUV;   // mat3(mat4) is not GLSL ES 1.00
+  gl_Position = uVP * w;
+}`;
+const FS = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;     // world positions up to ~75 m: mediump (fp16 on phones) breaks the grid/sky
+#else
+precision mediump float;
+#endif
+varying vec3 vWorld; varying vec3 vNor; varying vec2 vUV;
+uniform vec3 uColor, uEye;
+uniform float uMode;           // 0 lit colour, 1 lit texture, 2 floor grid, 3 sky
+uniform sampler2D uTex;
+const vec3 HORIZON = vec3(0.10, 0.13, 0.22);
+const vec3 ZENITH  = vec3(0.01, 0.015, 0.05);
+void main() {
+  vec3 toP = vWorld - uEye;
+  if (uMode > 2.5) {             // sky: gradient by view elevation
+    float e = normalize(toP).y;
+    vec3 c = mix(HORIZON, ZENITH, smoothstep(0.0, 0.6, e));
+    c = mix(c, vec3(0.03, 0.03, 0.05), smoothstep(0.0, -0.3, e));
+    gl_FragColor = vec4(c, 1.0); return;
+  }
+  vec3 n = normalize(vNor);
+  float light = 0.5 + 0.5 * max(dot(n, normalize(vec3(0.35, 1.0, 0.45))), 0.0);
+  vec3 c;
+  if (uMode > 1.5) {             // floor: 1 m grid, brighter every 5 m
+    vec2 g1 = abs(fract(vWorld.xz - 0.5) - 0.5);
+    vec2 g5 = abs(fract(vWorld.xz / 5.0 - 0.5) - 0.5) * 5.0;
+    float l1 = 1.0 - smoothstep(0.015, 0.045, min(g1.x, g1.y));
+    float l5 = 1.0 - smoothstep(0.03, 0.07, min(g5.x, g5.y));
+    c = vec3(0.13, 0.14, 0.17);
+    c = mix(c, vec3(0.32, 0.36, 0.44), l1);
+    c = mix(c, vec3(0.55, 0.62, 0.75), l5);
+  } else if (uMode > 0.5) {
+    c = texture2D(uTex, vUV).rgb * (0.35 + 0.65 * light) * 1.15;   // pillars: keep the letters bright
+  } else {
+    c = uColor * light;
+  }
+  float fog = 1.0 - exp(-length(toP) * 0.03);
+  gl_FragColor = vec4(mix(c, HORIZON, fog), 1.0);
+}`;
+
+function compile(type, src) {
+  const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+  return sh;
+}
+let prog, U = {}, A = {};
+if (gl) {
+  prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  for (const n of ["uModel", "uVP", "uColor", "uEye", "uMode", "uTex"]) U[n] = gl.getUniformLocation(prog, n);
+  for (const n of ["aPos", "aNor", "aUV"]) A[n] = gl.getAttribLocation(prog, n);
+  gl.enable(gl.DEPTH_TEST);
+}
+
+// Interleaved mesh: pos(3) nor(3) uv(2)
+function makeMesh(data) {
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+  return {buf, count: data.length / 8};
+}
+// Unit cube. Each face: normal n, and the "right" r / "up" u seen from OUTSIDE (r x u = n),
+// so the texture reads correctly (not mirrored) on every side.
+function cubeData() {
+  const faces = [
+    [[ 1, 0, 0], [0, 0, -1], [0, 1, 0]],
+    [[-1, 0, 0], [0, 0,  1], [0, 1, 0]],
+    [[ 0, 0, 1], [1, 0,  0], [0, 1, 0]],
+    [[ 0, 0,-1], [-1, 0, 0], [0, 1, 0]],
+    [[ 0, 1, 0], [1, 0,  0], [0, 0, -1]],
+    [[ 0,-1, 0], [1, 0,  0], [0, 0,  1]],
+  ];
+  const out = [];
+  for (const [n, r, u] of faces) {
+    const corner = (s, t) => {
+      const p = [0, 1, 2].map(i => 0.5 * (n[i] + s * r[i] + t * u[i]));
+      return [...p, ...n, (s + 1) / 2, (1 - t) / 2];     // canvas row 0 = top -> v = 0 at top
+    };
+    const a = corner(-1, -1), b = corner(1, -1), c = corner(1, 1), d = corner(-1, 1);
+    out.push(...a, ...b, ...c, ...a, ...c, ...d);
+  }
+  return out;
+}
+function planeData() {       // 1x1 in XZ, facing up
+  const v = (x, z) => [x, 0, z, 0, 1, 0, x + 0.5, z + 0.5];
+  return [...v(-.5, -.5), ...v(-.5, .5), ...v(.5, .5), ...v(-.5, -.5), ...v(.5, .5), ...v(.5, -.5)];
+}
+
+// Big letter textures for the pillars (POT 256x1024 = 1:4, same as a 1.5 x 6 m pillar face)
+function letterTexture(letter, word, bg) {
+  const c = document.createElement("canvas"); c.width = 256; c.height = 1024;
+  const g = c.getContext("2d");
+  g.fillStyle = bg; g.fillRect(0, 0, 256, 1024);
+  g.strokeStyle = "rgba(255,255,255,.85)"; g.lineWidth = 10; g.strokeRect(5, 5, 246, 1014);
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.font = "bold 230px Arial, Helvetica, sans-serif";
+  g.lineWidth = 14; g.strokeStyle = "rgba(0,0,0,.75)";
+  g.strokeText(letter, 128, 600); g.fillStyle = "#fff"; g.fillText(letter, 128, 600);
+  g.font = "bold 46px Arial, Helvetica, sans-serif";
+  g.lineWidth = 6; g.strokeText(word, 128, 430); g.fillText(word, 128, 430);
+  // little arrow pointing at the letter from the word, so "up" is obvious
+  g.beginPath(); g.moveTo(128, 820); g.lineTo(98, 770); g.lineTo(158, 770); g.closePath(); g.fill();
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return t;
+}
+
+// ── Scene: GL world is X = east, Y = up, -Z = north ─────────────────────────
+let cube, plane, objects = [];
+if (gl) {
+  cube = makeMesh(cubeData());
+  plane = makeMesh(planeData());
+  const D = 6;   // pillar distance (m)
+  const pillars = [
+    ["N", "NORTH", "#b3201f", [0, 3, -D]],
+    ["E", "EAST",  "#1d8f32", [D, 3, 0]],
+    ["S", "SOUTH", "#2443b8", [0, 3, D]],
+    ["W", "WEST",  "#b8a018", [-D, 3, 0]],
+  ];
+  objects.push({mesh: plane, mode: 2, pos: [0, 0, 0], scale: [80, 1, 80]});
+  for (const [l, w, col, p] of pillars)
+    objects.push({mesh: cube, mode: 1, tex: letterTexture(l, w, col), pos: p, scale: [1.5, 6, 1.5]});
+  const cubes = [   // small cubes for depth: [x, y, z, size, r, g, b]
+    [1.2, 0.25, -2.5, 0.5, 0.9, 0.5, 0.2], [-1.6, 1.4, -3.0, 0.35, 0.3, 0.8, 0.9],
+    [2.6, 0.2, 1.8, 0.4, 0.8, 0.3, 0.8], [-2.4, 0.3, 2.2, 0.6, 0.9, 0.9, 0.9],
+    [0.6, 1.6, -1.6, 0.2, 1.0, 0.85, 0.2], [3.4, 0.8, -3.2, 0.45, 0.4, 0.9, 0.5],
+    [-3.5, 0.2, -1.0, 0.4, 0.95, 0.4, 0.4], [-0.8, 2.4, 3.2, 0.5, 0.5, 0.6, 1.0],
+  ];
+  for (const [x, y, z, s, r, g, b] of cubes)
+    objects.push({mesh: cube, mode: 0, color: [r, g, b], pos: [x, y, z], scale: [s, s, s]});
+}
+
+// ── Maths: 3x3 as row arrays, 4x4 column-major Float32Array ─────────────────
+const rotY = (a) => [[Math.cos(a), 0, Math.sin(a)], [0, 1, 0], [-Math.sin(a), 0, Math.cos(a)]];
+const rotX = (a) => [[1, 0, 0], [0, Math.cos(a), -Math.sin(a)], [0, Math.sin(a), Math.cos(a)]];
+function mul3(A, B) {
+  return A.map(row => [0, 1, 2].map(j => row[0] * B[0][j] + row[1] * B[1][j] + row[2] * B[2][j]));
+}
+function qToRows(q) {
+  const [x, y, z, w] = q;
+  return [[1 - 2*(y*y + z*z), 2*(x*y - z*w),     2*(x*z + y*w)],
+          [2*(x*y + z*w),     1 - 2*(x*x + z*z), 2*(y*z - x*w)],
+          [2*(x*z - y*w),     2*(y*z + x*w),     1 - 2*(x*x + y*y)]];
+}
+function qMul(a, b) {
+  return [a[3]*b[0] + a[0]*b[3] + a[1]*b[2] - a[2]*b[1],
+          a[3]*b[1] - a[0]*b[2] + a[1]*b[3] + a[2]*b[0],
+          a[3]*b[2] + a[0]*b[1] - a[1]*b[0] + a[2]*b[3],
+          a[3]*b[3] - a[0]*b[0] - a[1]*b[1] - a[2]*b[2]];
+}
+// Sensor world is Z-up (east, north, up); ours is Y-up with -Z north. Device "screen" axes
+// (x right, y up, z out of the screen) are exactly a GL camera's axes.
+const enuToGl = (M) => [M[0], M[2], M[1].map(v => -v)];
+function perspective(fovy, aspect, near, far) {
+  const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+  return new Float32Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) * nf, -1, 0, 0, 2 * far * near * nf, 0]);
+}
+function viewMatrix(R, e) {     // R rows = camera->world; view = [R^T | -R^T e]
+  const m = new Float32Array(16);
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) m[j * 4 + i] = R[j][i];
+    m[12 + i] = -(R[0][i] * e[0] + R[1][i] * e[1] + R[2][i] * e[2]);
+  }
+  m[15] = 1;
+  return m;
+}
+function mul4(a, b) {
+  const o = new Float32Array(16);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+    let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
+    o[c * 4 + r] = s;
+  }
+  return o;
+}
+function modelMatrix(p, s) {
+  return new Float32Array([s[0], 0, 0, 0, 0, s[1], 0, 0, 0, 0, s[2], 0, p[0], p[1], p[2], 1]);
+}
+const headYawOf = (H) => Math.atan2(H[0][2], H[2][2]);   // forward = -col2, yaw = atan2(-fx, -fz)
+
+// ── Head tracking ──────────────────────────────────────────────────────────
+function screenAngle() {
+  const a = (screen.orientation && typeof screen.orientation.angle === "number") ? screen.orientation.angle : window.orientation;
+  return (a || 0);
+}
+function orientationText() {
+  const t = screen.orientation ? screen.orientation.type : (Math.abs(window.orientation || 0) === 90 ? "landscape" : "portrait");
+  return `${t} ${screenAngle()}`;
+}
+// (a) deviceorientation alpha/beta/gamma -> quaternion in the screen frame (W3C formula + screen rotation)
+function eulerToScreenQuat(alpha, beta, gamma) {
+  const x = (beta || 0) * deg / 2, y = (gamma || 0) * deg / 2, z = (alpha || 0) * deg / 2;
+  const cX = Math.cos(x), cY = Math.cos(y), cZ = Math.cos(z), sX = Math.sin(x), sY = Math.sin(y), sZ = Math.sin(z);
+  const q = [sX*cY*cZ - cX*sY*sZ, cX*sY*cZ + sX*cY*sZ, cX*cY*sZ + sX*sY*cZ, cX*cY*cZ - sX*sY*sZ];
+  const a = -screenAngle() * deg / 2;
+  return qMul(q, [0, 0, Math.sin(a), Math.cos(a)]);
+}
+let lastOrientEvent = 0, orientEvents = 0, sensorHz = 0;
+// Chrome on a phone with NO gyro (the A08) still fires deviceorientation: beta/gamma come from the
+// accelerometer and alpha is a constant 0. Those events must not count as a gyro (Euler angles from
+// gravity are gimbal-locked in landscape), so a gyro needs alpha that actually changes, or a
+// devicemotion rotationRate (only present with a real gyroscope), or iOS (every iPhone has a gyro).
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+               (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+let alphaFirst = null, alphaMoved = false, rotRateSeen = false;
+function onOrientation(e) {
+  if (e.alpha == null || e.beta == null) return;
+  lastOrientEvent = performance.now();
+  if (alphaFirst === null) alphaFirst = e.alpha;
+  else if (Math.abs(e.alpha - alphaFirst) > 1e-3) alphaMoved = true;
+  if (state.source !== "gyro (deviceorientation)" && state.source !== "compass (absolute)") return;
+  orientEvents++;
+  setHead(enuToGl(qToRows(eulerToScreenQuat(e.alpha, e.beta, e.gamma))));
+}
+function onMotionProbe(e) {
+  const r = e.rotationRate;
+  if (r && r.alpha != null && r.beta != null) { rotRateSeen = true; removeEventListener("devicemotion", onMotionProbe); }
+}
+const looksLikeGyro = () => lastOrientEvent > 0 && (IS_IOS || alphaMoved || rotRateSeen);
+function onOrientationAbs(e) {
+  if (state.source !== "compass (absolute)" || e.alpha == null) return;
+  orientEvents++;
+  setHead(enuToGl(qToRows(eulerToScreenQuat(e.alpha, e.beta, e.gamma))));
+}
+function setHead(H) {
+  state.H = H;
+  if (state.needRecenter) { recenter(); state.needRecenter = false; }
+}
+function recenter() {
+  state.yawOffset = state.H ? -headYawOf(state.H) : 0;
+  state.bodyYaw = 0;
+  hint("Recentered", 1200);
+}
+
+// (b) tilt from gravity (accelerometer only): pitch + roll, no yaw
+const TILT_SMOOTH = 0.25;
+const FLIP_PARAM = PARAMS.get("flip");          // "1"/"0" force, null = auto
+let flipXY = false, upsideDownN = 0, grav = null, gravText = "";
+function gravityReading(x, y, z) {
+  if (flipXY) { x = -x; y = -y; }
+  if (FLIP_PARAM === null) {
+    const n = Math.hypot(x, y, z);
+    upsideDownN = (n > 5 && y / n < -0.6) ? upsideDownN + 1 : 0;
+    if (upsideDownN > 30) {                     // a head is never upside down for 0.5 s: flip
+      flipXY = !flipXY; upsideDownN = 0; grav = null;
+      console.log("tilt: view was upside down, flip =", flipXY);
+      return;
+    }
+  }
+  orientEvents++;
+  gravText = `g ${x.toFixed(1)} ${y.toFixed(1)} ${z.toFixed(1)}${flipXY ? " flip" : ""}`;
+  if (!grav) grav = [x, y, z];
+  else { grav[0] += TILT_SMOOTH * (x - grav[0]); grav[1] += TILT_SMOOTH * (y - grav[1]); grav[2] += TILT_SMOOTH * (z - grav[2]); }
+  const n = Math.hypot(grav[0], grav[1], grav[2]); if (n < 1) return;
+  const u = grav.map(v => v / n);               // world "up" in screen coords
+  const fu = -u[2];
+  let h = [-fu * u[0], -fu * u[1], -1 - fu * u[2]];   // look direction flattened = "north"
+  if (Math.hypot(...h) < 0.15) {                // looking straight up/down: use the top edge
+    const s = fu > 0 ? -1 : 1, yu = u[1];
+    h = [s * (0 - yu * u[0]), s * (1 - yu * u[1]), s * (0 - yu * u[2])];
+  }
+  const hn = Math.hypot(...h), Y = h.map(v => v / hn), Z = u;
+  const X = [Y[1]*Z[2] - Y[2]*Z[1], Y[2]*Z[0] - Y[0]*Z[2], Y[0]*Z[1] - Y[1]*Z[0]];
+  state.H = enuToGl([X, Y, Z]);                 // rows = world E/N/U in screen coords
+}
+function startTilt() {
+  if ("Accelerometer" in window && PARAMS.get("sensor") !== "motion") {
+    try {
+      const s = new Accelerometer({frequency: 60, referenceFrame: "screen"});
+      let got = false;
+      flipXY = FLIP_PARAM !== null ? FLIP_PARAM === "1" : true;   // the A08 fit that was proven with hmd.html
+      s.onreading = () => { got = true; gravityReading(s.x, s.y, s.z); };
+      s.onerror = (e) => { console.warn("Accelerometer:", e.error && e.error.name); if (!got) startDeviceMotion(); };
+      s.start();
+      state.source = "tilt (Accelerometer)";
+      setTimeout(() => { if (!got && state.source === "tilt (Accelerometer)") startDeviceMotion(); }, 1200);
+      return;
+    } catch (e) { console.warn("Accelerometer failed:", e.message); }
+  }
+  startDeviceMotion();
+}
+let motionStarted = false;
+function startDeviceMotion() {
+  if (motionStarted) return; motionStarted = true;
+  flipXY = FLIP_PARAM === "1";
+  // iOS reports accelerationIncludingGravity with the opposite sign to Android
+  const iosSign = /iPhone|iPad|iPod/.test(navigator.userAgent) ? -1 : 1;
+  state.source = "tilt (devicemotion)";
+  let got = false;
+  addEventListener("devicemotion", (e) => {
+    const g = e.accelerationIncludingGravity;
+    if (!g || g.x == null) return;
+    got = true;
+    const a = screenAngle() * deg, c = Math.cos(a), s = Math.sin(a);
+    const dx = g.x * iosSign, dy = g.y * iosSign, dz = g.z * iosSign;
+    gravityReading(dx * c - dy * s, dx * s + dy * c, dz);   // device axes -> screen axes
+  });
+  setTimeout(() => { if (!got) state.source = "none (no motion sensors)"; }, 1500);
+}
+
+let compassAvailable = false;
+function startSensors() {
+  addEventListener("deviceorientation", onOrientation);
+  addEventListener("deviceorientationabsolute", (e) => { if (e.alpha != null) compassAvailable = true; onOrientationAbs(e); });
+  addEventListener("devicemotion", onMotionProbe);
+  const want = PARAMS.get("sensor");             // ?sensor=tilt|motion|compass|gyro to force
+  if (want === "tilt" || want === "motion") { startTilt(); return; }
+  if (want === "compass") { state.source = "compass (absolute)"; state.needRecenter = true; return; }
+  if (want === "gyro") { state.source = "gyro (deviceorientation)"; state.needRecenter = true; return; }
+  state.source = "waiting for sensors";
+  setTimeout(() => {                             // gyro phones send changing alpha within ~1 s
+    if (looksLikeGyro()) {
+      state.source = "gyro (deviceorientation)";
+    } else {
+      if (lastOrientEvent > 0) state.sensorsInfo = "orientation events without a gyro (alpha fixed)";
+      startTilt();
+    }
+  }, 1200);
+}
+
+// ── Input: touch drag turns, double-tap recenters, gamepad ──────────────────
+let drag = null, lastTap = 0, tapTimer = null;
+canvas.addEventListener("pointerdown", (e) => { drag = {x: e.clientX, moved: 0}; canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x; drag.x = e.clientX; drag.moved += Math.abs(dx);
+  const span = state.stereo ? innerWidth / 2 : innerWidth;
+  state.bodyYaw += dx / span * Math.PI * 0.75;     // drag the world: right drag = look left
+});
+canvas.addEventListener("pointerup", () => {
+  const wasDrag = drag && drag.moved > 12; drag = null;
+  if (wasDrag) return;
+  const now = performance.now();
+  if (now - lastTap < 320) { clearTimeout(tapTimer); recenter(); lastTap = 0; return; }
+  lastTap = now;
+  tapTimer = setTimeout(() => showHud(5000), 330);
+});
+canvas.addEventListener("pointercancel", () => { drag = null; });
+document.getElementById("btnRecenter").addEventListener("click", recenter);
+btnMode.addEventListener("click", () => setStereo(!state.stereo));
+function syncLensUi() {
+  offRange.value = lens.offset; fovRange.value = lens.fov;
+  document.getElementById("offVal").textContent = lens.offset.toFixed(3);
+  document.getElementById("fovVal").textContent = lens.fov + "\u00b0";
+}
+document.getElementById("btnLens").addEventListener("click", () => {
+  lensPanel.hidden = !lensPanel.hidden; syncLensUi();
+  if (!lensPanel.hidden) showCrosses(0); else { crossL.hidden = true; crossR.hidden = true; }
+});
+offRange.addEventListener("input", () => setLens({offset: parseFloat(offRange.value)}, false));
+fovRange.addEventListener("input", () => setLens({fov: parseFloat(fovRange.value)}, false));
+document.getElementById("lensReset").addEventListener("click", () => setLens({reset: true}, false));
+document.getElementById("lensClose").addEventListener("click", () => { lensPanel.hidden = true; crossL.hidden = true; crossR.hidden = true; });
+function setStereo(on) {
+  state.stereo = on;
+  document.getElementById("divider").hidden = !on;   // black seam between the two eyes
+  btnMode.textContent = on ? "Mono" : "Stereo";   // the button names what it switches TO
+  layoutHud(); showHud(3000);
+}
+
+const DEAD = 0.18;
+const dz = (v) => Math.abs(v) < DEAD ? 0 : (v - Math.sign(v) * DEAD) / (1 - DEAD);
+let padPrev = {};
+function pollGamepad(dt) {
+  if (!navigator.getGamepads) return;
+  let pad = null;
+  for (const p of navigator.getGamepads()) if (p && p.connected) { pad = p; break; }
+  state.gamepad = pad ? pad.id.slice(0, 40) : "";
+  if (!pad) return;
+  const ax = pad.axes;
+  const lx = dz(ax[0] || 0), ly = dz(ax[1] || 0), rx = dz(ax[2] || 0);
+  state.bodyYaw -= rx * 1.8 * dt;                  // right stick turns (~100 deg/s)
+  if (lx || ly) {
+    const R = currentRotation();
+    let fx = -R[0][2], fz = -R[2][2]; const fl = Math.hypot(fx, fz) || 1; fx /= fl; fz /= fl;
+    const speed = 2.2 * dt;                        // m/s
+    state.pos[0] += (fx * -ly + -fz * lx) * speed;
+    state.pos[2] += (fz * -ly + fx * lx) * speed;
+  }
+  const pressed = (i) => pad.buttons[i] && pad.buttons[i].pressed;
+  if (pressed(3) && !padPrev[3]) recenter();       // Y / triangle
+  if (pressed(9) && !padPrev[9]) setStereo(!state.stereo);   // Start / Options
+  // D-pad: left/right = eye separation, up/down = field of view (tune with the headset on)
+  if (pressed(15) && !padPrev[15]) setLens({doffset: 0.005});
+  if (pressed(14) && !padPrev[14]) setLens({doffset: -0.005});
+  if (pressed(12) && !padPrev[12]) setLens({dfov: 2});
+  if (pressed(13) && !padPrev[13]) setLens({dfov: -2});
+  padPrev = {3: pressed(3), 9: pressed(9), 12: pressed(12), 13: pressed(13), 14: pressed(14), 15: pressed(15)};
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.round((canvas.clientWidth || innerWidth) * dpr), h = Math.round((canvas.clientHeight || innerHeight) * dpr);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+}
+function currentRotation() {
+  const H = state.H || rotX(fixedPitch);
+  return mul3(rotY(state.bodyYaw + state.yawOffset), H);
+}
+function drawEye(R, eyeOffset, x, y, w, h, fovy, shiftX = 0) {
+  gl.viewport(x, y, w, h); gl.scissor(x, y, w, h);
+  gl.clearColor(0.1, 0.13, 0.22, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  const e = [state.pos[0] + R[0][0] * eyeOffset, state.pos[1] + EYE_H + R[1][0] * eyeOffset, state.pos[2] + R[2][0] * eyeOffset];
+  const vp = mul4(perspective(fovy, w / h, 0.05, 200), viewMatrix(R, e));
+  // Off-axis shift: move this eye's image centre sideways (NDC units) to sit under its lens
+  if (shiftX) for (let c = 0; c < 4; c++) vp[c * 4] += shiftX * vp[c * 4 + 3];
+  gl.uniformMatrix4fv(U.uVP, false, vp);
+  gl.uniform3fv(U.uEye, e);
+  // sky box around the eye, no depth write
+  gl.depthMask(false);
+  gl.uniform1f(U.uMode, 3);
+  drawMesh(cube, modelMatrix(e, [150, 150, 150]));
+  gl.depthMask(true);
+  for (const o of objects) {
+    gl.uniform1f(U.uMode, o.mode);
+    if (o.tex) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, o.tex); gl.uniform1i(U.uTex, 0); }
+    if (o.color) gl.uniform3fv(U.uColor, o.color);
+    drawMesh(o.mesh, modelMatrix(o.pos, o.scale));
+  }
+}
+function drawMesh(mesh, model) {
+  gl.uniformMatrix4fv(U.uModel, false, model);
+  gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buf);
+  gl.enableVertexAttribArray(A.aPos); gl.vertexAttribPointer(A.aPos, 3, gl.FLOAT, false, 32, 0);
+  gl.enableVertexAttribArray(A.aNor); gl.vertexAttribPointer(A.aNor, 3, gl.FLOAT, false, 32, 12);
+  gl.enableVertexAttribArray(A.aUV);  gl.vertexAttribPointer(A.aUV, 2, gl.FLOAT, false, 32, 24);
+  gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+}
+let lastT = performance.now();
+function frame(t) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.1, (t - lastT) / 1000); lastT = t;
+  pollGamepad(dt);
+  resize();
+  const R = currentRotation();
+  const W = canvas.width, Hh = canvas.height;
+  gl.enable(gl.SCISSOR_TEST);
+  if (state.stereo) {
+    const fov = lens.fov * deg;                              // per-eye vertical FOV
+    const half = Math.floor(W / 2);
+    drawEye(R, -IPD / 2, 0, 0, half, Hh, fov, 2 * lens.offset);      // left image moves right
+    drawEye(R, IPD / 2, half, 0, W - half, Hh, fov, -2 * lens.offset);  // right image moves left
+  } else {
+    drawEye(R, 0, 0, 0, W, Hh, parseFloat(PARAMS.get("fov") || "70") * deg);
+  }
+  state.frames++;
+}
+
+// ── HUD / hints ────────────────────────────────────────────────────────────
+let hudTimer = null;
+function layoutHud() {
+  const [cl, cr] = eyeCentres();
+  crossL.style.left = (cl * 100) + "%"; crossR.style.left = (cr * 100) + "%";
+  if (state.stereo) { hudL.style.left = (cl * 100) + "%"; hudR.style.left = (cr * 100) + "%"; hudR.hidden = hudL.hidden; }
+  else { hudL.style.left = "50%"; hudR.hidden = true; }
+}
+function showHud(ms) {
+  hudL.hidden = false; layoutHud();
+  hudL.classList.remove("faded"); hudR.classList.remove("faded");
+  clearTimeout(hudTimer);
+  hudTimer = setTimeout(() => { hudL.classList.add("faded"); hudR.classList.add("faded"); }, ms);
+}
+let hintTimer = null;
+function hint(text, ms) {
+  hintEl.textContent = text; hintEl.classList.remove("faded");
+  clearTimeout(hintTimer); hintTimer = setTimeout(() => hintEl.classList.add("faded"), ms);
+}
+setInterval(() => {
+  state.fps = state.frames; state.frames = 0;
+  sensorHz = orientEvents; orientEvents = 0;
+  const txt = `${state.fps} fps  ${state.stereo ? "STEREO" : "MONO"}\n` +
+              `${state.source}${sensorHz ? "  " + sensorHz + " Hz" : ""}\n` +
+              (gravText && state.source.startsWith("tilt") ? gravText + "\n" : "") +
+              `laptop link: ${state.link}` + (state.gamepad ? `\npad: ${state.gamepad}` : "");
+  hudL.textContent = txt; hudR.textContent = txt;
+}, 1000);
+
+// ── Status report to the laptop (optional: the scene never depends on it) ───
+let clientId;
+try { clientId = sessionStorage.getItem("pvr_id"); } catch (_) {}
+if (!clientId) {
+  clientId = Math.random().toString(36).slice(2, 10);
+  try { sessionStorage.setItem("pvr_id", clientId); } catch (_) {}
+}
+let ws = null, wsFails = 0;
+function connectWs() {
+  try {
+    ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/status`);
+  } catch (e) { wsFails++; setTimeout(connectWs, 5000); return; }
+  ws.onopen = () => { wsFails = 0; state.link = "wss ok"; sendStatus(); };
+  ws.onclose = () => { ws = null; wsFails++; setTimeout(connectWs, Math.min(10000, 2000 * wsFails)); };
+  ws.onerror = () => {};
+  ws.onmessage = (ev) => {           // lens tuning keys pressed on the laptop
+    let m; try { m = JSON.parse(ev.data); } catch (_) { return; }
+    if (m.lens) { setLens(m.lens); sendStatus("lens"); }
+  };
+}
+function statusMsg(event) {
+  return {
+    id: clientId, ua: navigator.userAgent, platform: navigator.platform || "",
+    sensors: state.source + (compassAvailable ? " +compass" : "") + (state.sensorsInfo ? " [" + state.sensorsInfo + "]" : ""),
+    fps: state.fps, stereo: state.stereo, gamepad: state.gamepad, lens: {offset: lens.offset, fov: lens.fov},
+    orientation: orientationText(), w: canvas.width, h: canvas.height, dpr: window.devicePixelRatio,
+    standalone: !!(navigator.standalone || (matchMedia && matchMedia("(display-mode: fullscreen), (display-mode: standalone)").matches)),
+    fullscreen: !!(document.fullscreenElement || document.webkitFullscreenElement),
+    secure: window.isSecureContext, event: event || undefined,
+  };
+}
+function sendStatus(event) {
+  const msg = JSON.stringify(statusMsg(event));
+  if (ws && ws.readyState === 1) { ws.send(msg); return; }
+  // WebSocket down (iOS Safari may refuse wss to a self-signed cert): plain HTTPS POST instead
+  fetch("/api/status", {method: "POST", headers: {"Content-Type": "application/json"}, body: msg, cache: "no-store"})
+    .then(r => { state.link = r.ok ? (wsFails ? "https post ok (ws failed)" : "https post ok") : "post error " + r.status; })
+    .catch(() => { state.link = "offline (scene still runs)"; });
+}
+setInterval(() => sendStatus(), 2000);
+
+// ── Start ──────────────────────────────────────────────────────────────────
+let wakeLock = null;
+async function keepAwake() {
+  try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request("screen"); } catch (_) {}
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) keepAwake(); });
+
+function isStandalone() {
+  return !!(navigator.standalone || (window.matchMedia && matchMedia("(display-mode: fullscreen), (display-mode: standalone)").matches));
+}
+function begin(fromTap) {
+  startEl.hidden = true;
+  document.getElementById("buttons").hidden = false;
+  setStereo(state.stereo);
+  if (fromTap) {
+    // iOS: the permission prompts MUST be requested inside the tap, before any await.
+    const perms = [];
+    if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function")
+      perms.push(DeviceOrientationEvent.requestPermission().catch(e => "error: " + e.message));
+    if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === "function")
+      perms.push(DeviceMotionEvent.requestPermission().catch(e => "error: " + e.message));
+    // Fullscreen also needs the tap. iPhone Safari has no element fullscreen at all.
+    const el = document.documentElement;
+    const rf = el.requestFullscreen || el.webkitRequestFullscreen;
+    let fs = null;
+    if (rf) { try { fs = rf.call(el, {navigationUI: "hide"}); } catch (_) {} }
+    Promise.resolve(fs).then(() => {
+      if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(() => {});
+    }).catch(() => {});
+    const notes = [];
+    if (!rf && !isStandalone()) notes.push("No full screen in Safari: Share > Add to Home Screen for full screen");
+    if (!navigator.wakeLock) notes.push("This browser cannot keep the screen on: set Auto-Lock to Never");
+    if (notes.length) hint(notes.join(". "), 8000);
+    keepAwake();
+    Promise.all(perms).then((res) => {
+      if (res.length && !res.includes("granted"))
+        { state.sensorsInfo = "permission: " + res.join(","); hint("Motion permission was not granted: close the tab and reopen to be asked again", 8000); }
+      startSensors();
+    });
+  } else {
+    state.source = "none (autostart test)";
+  }
+  if (!state.H) state.needRecenter = true;
+  showHud(5000);
+  sendStatus("started");
+}
+document.getElementById("go").addEventListener("click", () => begin(true));
+if (!window.isSecureContext) {
+  const w = document.getElementById("secureWarn");
+  w.hidden = false;
+  w.textContent = "Not a secure (https) page: motion sensors will NOT work. Open https://" + location.hostname + ":8443/";
+}
+
+if (gl) {
+  resize();
+  requestAnimationFrame(frame);
+  connectWs();
+  if (AUTOSTART) begin(false);
+}
+</script>
+</body>
+</html>

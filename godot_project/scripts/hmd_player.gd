@@ -40,7 +40,8 @@ var _target: Node
 
 func _ready() -> void:
 	_setup_input_map()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if not OS.has_feature("web"):   # browsers refuse pointer lock without a click (phone: no mouse anyway)
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_make_hud()
 	for i in 3:
 		var s := SFX.load_sound("footstep_%d" % (i + 1))
@@ -67,6 +68,10 @@ func _set_msg_alpha(a: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventScreenDrag:   # phone touchscreen: drag to turn (web build on the phone)
+		var span := get_viewport().get_visible_rect().size.x * 0.5
+		rotate_y(event.relative.x / maxf(span, 1.0) * PI * 0.75)
+		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		rotate_y(deg_to_rad(-event.relative.x * mouse_sensitivity))
 		if not _phone_active():
@@ -100,7 +105,62 @@ func _process(delta: float) -> void:
 		get_tree().reload_current_scene()
 
 
+## Web build on the phone: the laptop's controller arrives from the page (window.hmdPadStr,
+## "pad,buttons,lx,ly,rx,ry,lt,rt", see phone_host/pad_relay.py) and is fed to Godot as a normal
+## joypad (device 0), so every existing stick / button / action works unchanged.
+var _web := OS.has_feature("web")
+var _rpad_buttons := 0
+var _rpad_axes := [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+var _rpad_on := false
+var _rpad_full_timer := 0.0   # <= 0: next update re-sends EVERYTHING (Input state outlives scene reloads)
+
+
+func _poll_remote_pad() -> void:
+	var v = JavaScriptBridge.eval("window.hmdPadStr || ''", true)
+	if not (v is String) or not v.begins_with("pad,"):
+		v = "pad,none"
+	var p: PackedStringArray = v.split(",")
+	if p.size() < 8:          # "pad,none": laptop controller gone -> release everything once
+		if _rpad_on:
+			_rpad_on = false
+			_feed_pad(0, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+		return
+	if not _rpad_on:
+		_rpad_on = true
+		print("[player] laptop controller relay active")
+	var axes := []
+	for i in range(2, 8):
+		axes.append(p[i].to_float())
+	_feed_pad(p[1].to_int(), axes)
+
+
+func _feed_pad(buttons: int, axes: Array) -> void:
+	_rpad_full_timer -= get_physics_process_delta_time()
+	var full := _rpad_full_timer <= 0.0
+	if full:
+		_rpad_full_timer = 0.5
+	var changed := 0x7FFF if full else buttons ^ _rpad_buttons
+	for i in 15:
+		if changed & (1 << i):
+			var e := InputEventJoypadButton.new()
+			e.device = 0
+			e.button_index = i as JoyButton
+			e.pressed = (buttons & (1 << i)) != 0
+			Input.parse_input_event(e)
+	_rpad_buttons = buttons
+	for i in 6:
+		if full or absf(axes[i] - _rpad_axes[i]) > 0.001:
+			var m := InputEventJoypadMotion.new()
+			m.device = 0
+			m.axis = i as JoyAxis
+			m.axis_value = axes[i]
+			Input.parse_input_event(m)
+			_rpad_axes[i] = axes[i]
+
+
 func _physics_process(delta: float) -> void:
+	if _web:
+		_poll_remote_pad()
 	# Right stick turns (and pitches when no phone)
 	var rx := _deadzone(Input.get_joy_axis(0, JOY_AXIS_RIGHT_X))
 	var ry := _deadzone(Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y))
@@ -120,6 +180,15 @@ func _physics_process(delta: float) -> void:
 			_deadzone(Input.get_joy_axis(0, JOY_AXIS_LEFT_Y)))
 	input = input.limit_length(1.0)
 	var dir := transform.basis * Vector3(input.x, 0.0, input.y)
+	if phone:   # walk where you LOOK: the phone's gyro turns the head left/right, not the body
+		var fwd := -cam.global_basis.z
+		if absf(fwd.y) > 0.97:   # looking at your feet / the ceiling: the top of the head points the way
+			fwd = cam.global_basis.y * (1.0 if fwd.y < 0.0 else -1.0)
+		fwd.y = 0.0
+		if fwd.length() > 0.05:
+			fwd = fwd.normalized()
+			var right := Vector3(-fwd.z, 0.0, fwd.x)
+			dir = right * input.x - fwd * input.y
 	velocity.x = dir.x * move_speed
 	velocity.z = dir.z * move_speed
 	velocity.y = 0.0 if is_on_floor() else velocity.y - _gravity * delta

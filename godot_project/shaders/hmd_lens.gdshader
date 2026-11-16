@@ -12,6 +12,7 @@ uniform float lens_offset = 0.08;   // lens centre shift toward the nose (fracti
 uniform float zoom = 1.0;           // >1 shows less of the image (bigger), <1 shows more
 uniform float eye_aspect = 1.111;   // eye width / height in pixels (800 / 720)
 uniform float chroma = 0.0;         // red/blue split to cancel lens colour fringing (try 0.01–0.03)
+uniform float plain_shift = 0.0;    // no-distortion view: move each eye's image toward the nose (web build on the phone)
 
 vec2 warp(vec2 d, float scale) {
 	d.x *= eye_aspect;
@@ -29,7 +30,12 @@ void fragment() {
 	bool right = UV.x >= 0.5;
 	vec2 e = vec2(fract(UV.x * 2.0), UV.y);   // 0..1 inside this eye's half
 	if (!distortion) {
-		COLOR = right ? texture(right_eye, e) : texture(left_eye, e);
+		vec2 se = e - vec2(right ? -plain_shift : plain_shift, 0.0);
+		if (plain_shift != 0.0 && outside(se)) {
+			COLOR = vec4(0.0, 0.0, 0.0, 1.0);
+		} else {
+			COLOR = right ? texture(right_eye, se) : texture(left_eye, se);
+		}
 	} else {
 		// Lens centre sits closer to the nose than the middle of each half
 		vec2 c = vec2(0.5 + (right ? -lens_offset : lens_offset), 0.5);
