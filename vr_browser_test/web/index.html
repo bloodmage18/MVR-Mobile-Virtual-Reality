@@ -835,6 +835,76 @@ function connectWs() {
     setTimeout(connectWs, Math.min(8000, 1000 * wsFails));
   };
 }
+// ── Round B1: the laptop browser's sound plays on the phone ────────────────────────────────────────────
+// /ws/audio sends Brave's sound (only Brave's, captured on the laptop) as 48 kHz stereo 16-bit PCM; an
+// AudioWorklet plays it with ~0.1 s of buffer. ?audio=0 turns it off (sound then stays on the laptop).
+const AUDIO = {ctx: null, node: null, ws: null, fails: 0, want: PARAMS.get("audio") !== "0", bytes: 0};
+const PCM_WORKLET = `
+class VrbPcm extends AudioWorkletProcessor {
+  constructor() {
+    super(); this.q = []; this.off = 0; this.n = 0; this.on = false;
+    this.port.onmessage = (e) => {
+      const a = new Int16Array(e.data); this.q.push(a); this.n += a.length / 2;
+      if (this.n > sampleRate * 0.35)              // fell behind (the phone was busy): drop to ~0.12 s
+        while (this.n > sampleRate * 0.12 && this.q.length > 1) {
+          const d = this.q.shift(); this.n -= (d.length - this.off) / 2; this.off = 0;
+        }
+    };
+  }
+  process(inputs, outputs) {
+    const L = outputs[0][0], R = outputs[0][1] || L, len = L.length;
+    if (!this.on) { if (this.n < sampleRate * 0.08) return true; this.on = true; }
+    let i = 0;
+    while (i < len && this.q.length) {
+      const a = this.q[0];
+      while (i < len && this.off < a.length) { L[i] = a[this.off] / 32768; R[i] = a[this.off + 1] / 32768; this.off += 2; this.n--; i++; }
+      if (this.off >= a.length) { this.q.shift(); this.off = 0; }
+    }
+    if (i < len) this.on = false;                  // ran dry: buffer up again before playing (no crackle)
+    return true;
+  }
+}
+registerProcessor("vrb-pcm", VrbPcm);`;
+function audioStart() {                            // call inside a tap the first time (autoplay rules)
+  if (!AUDIO.want || DEMO || !location.host) return;
+  if (AUDIO.ctx) { if (AUDIO.ctx.state !== "running") AUDIO.ctx.resume().catch(() => {}); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (_) {}  // iOS: play even with the silent switch on
+  let ctx;
+  try { ctx = new AC({sampleRate: 48000, latencyHint: "interactive"}); } catch (_) { try { ctx = new AC(); } catch (e) { return; } }
+  AUDIO.ctx = ctx;
+  ctx.resume().catch(() => {});
+  if (!ctx.audioWorklet) { console.warn("laptop sound: no AudioWorklet in this browser"); return; }
+  const url = URL.createObjectURL(new Blob([PCM_WORKLET], {type: "application/javascript"}));
+  ctx.audioWorklet.addModule(url).then(() => {
+    AUDIO.node = new AudioWorkletNode(ctx, "vrb-pcm", {numberOfInputs: 0, outputChannelCount: [2]});
+    AUDIO.node.connect(ctx.destination);
+    audioConnect();
+  }).catch((e) => console.warn("laptop sound:", e && e.message));
+}
+function audioConnect() {
+  if (!AUDIO.node) return;
+  let s;
+  try { s = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/audio?k=${encodeURIComponent(KEY)}`); }
+  catch (_) { AUDIO.fails++; setTimeout(audioConnect, 3000); return; }
+  AUDIO.ws = s;
+  s.binaryType = "arraybuffer";
+  s.onopen = () => { AUDIO.fails = 0; };
+  s.onmessage = (ev) => {
+    if (typeof ev.data === "string" || !AUDIO.node) return;
+    AUDIO.bytes += ev.data.byteLength;
+    AUDIO.node.port.postMessage(ev.data, [ev.data]);
+  };
+  s.onclose = () => {
+    if (AUDIO.ws === s) AUDIO.ws = null;
+    AUDIO.fails++;
+    setTimeout(audioConnect, Math.min(8000, 1000 * AUDIO.fails));
+  };
+}
+document.addEventListener("pointerdown", () => { if (AUDIO.ctx && AUDIO.ctx.state !== "running") AUDIO.ctx.resume().catch(() => {}); }, true);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && AUDIO.ctx) AUDIO.ctx.resume().catch(() => {}); });
+
 // Half-open socket (Wi-Fi lost): the server sends a pad heartbeat every 0.5 s, so silence = dead
 setInterval(() => {
   if (ws && ws.readyState === 1 && performance.now() - wsLastMsg > 5000) { try { ws.close(); } catch (_) {} }
@@ -946,6 +1016,33 @@ function onMessage(m) {
 
 // ── Phone capability probe (G6) ─────────────────────────────────────────────
 let caps = null;
+// Round B1: the video height this phone could not keep up with (from a "lag" step-down) is remembered for
+// 14 days, so the next video starts one quality lower instead of stuttering first (A08: 2160p -> 1440p).
+const LAGCAP_KEY = "vrb_lag_h", LAGCAP_DAYS = 14;
+function lagCap() {
+  try {
+    const o = JSON.parse(localStorage.getItem(LAGCAP_KEY) || "null");
+    if (o && o.h > 0 && Date.now() - o.at < LAGCAP_DAYS * 864e5) return o.h;
+  } catch (_) {}
+  return 0;
+}
+function applyLagCap(c) {
+  const h = lagCap();
+  if (!c || !h || !c.v) return c;
+  for (const fam in c.v) for (const t of ["mse", "file"]) {
+    const row = c.v[fam][t];
+    if (Array.isArray(row)) c.v[fam][t] = row.map((x) => Math.min(x, h - 1));
+  }
+  c.lagh = h;
+  return c;
+}
+function noteLag() {                              // called when the phone asks for a lower quality
+  const h = Math.min(video.videoWidth || 0, video.videoHeight || 0);
+  if (!h || (lagCap() && lagCap() <= h)) return;
+  try { localStorage.setItem(LAGCAP_KEY, JSON.stringify({h, at: Date.now()})); } catch (_) {}
+  if (caps) { caps = applyLagCap(caps); send(Object.assign({t: "caps"}, caps)); }
+  console.warn("remembering: this phone stutters at " + h + "p");
+}
 const MSC = window.ManagedMediaSource || window.MediaSource || null;
 // test hook: ?capset=iphone|a08|old_iphone replaces the probe result with a fixed phone-like set
 const CAPSETS = {
@@ -1435,6 +1532,7 @@ function mseLagCheck(S) {
   if (S.strikes >= 2) {
     S.lagSent = true;
     console.warn("MSE: dropping " + Math.round(100 * drop / tot) + "% of the frames: asking for a lower quality");
+    noteLag();
     send({t: "vfail", mode: "mse", reason: "lag", time: +videoPos().toFixed(2)});
   }
 }
@@ -1500,6 +1598,7 @@ function splitTick(S) {
       if (drift < 0) { S.seeks = S.seeks.filter((t) => now - t < 20000); S.seeks.push(now); }   // only "video behind" is lag
       if (S.seeks.length >= 3 && !S.failSent) {       // the phone cannot keep up: ask for a lower rung
         S.failSent = true;
+        noteLag();
         send({t: "vfail", mode: "split", reason: "lag"});
       }
     }
@@ -2588,18 +2687,24 @@ function perfSecond(fps) {                         // once a second: adapt the r
   if (hz > perf.hz) perf.hz = hz;
   if (SCALE_FIXED || DPR_OVERRIDE) return;
   const now = performance.now();
+  if (now - perf.t0 < 8000) return;               // the first seconds (page start-up) say nothing
   if (fps < 0.85 * perf.hz) { perf.bad++; perf.good = 0; perf.badSum = (perf.badSum || 0) + fps; }
-  else if (fps >= 0.95 * perf.hz) { perf.good++; perf.bad = 0; perf.badSum = 0; perf.stuck = false; }
+  else if (fps >= 0.95 * perf.hz) { perf.good++; perf.bad = 0; perf.badSum = 0; perf.stuck = false; perf.hist = []; }
   if (perf.bad >= 4 && perf.stuck) { perf.bad = 0; perf.badSum = 0; return; }
-  if (perf.bad >= 4 && perf.downFps && perf.badSum / perf.bad <= perf.downFps * 1.05) {
-    // Fewer pixels did not help: the limit is not drawing (battery saver's 60 Hz cap, a busy main thread).
-    // Undo that step and stop lowering until the phone reaches full speed again.
-    perf.i = Math.max(0, perf.i - 1); perf.stuck = true; perf.downFps = 0; perf.bad = 0; perf.badSum = 0;
+  const avg = perf.bad ? perf.badSum / perf.bad : 0;
+  if (perf.bad >= 4 && perf.downFps && avg <= perf.downFps * 1.1) {
+    // Fewer pixels did not help (< 10 % more fps): the limit is not drawing (iPhone Low Power Mode's 30 fps,
+    // battery saver's 60 Hz cap, a busy main thread). Go back to the sharpest scale that was just as fast and
+    // stop lowering until the phone reaches full speed again.
+    const back = (perf.hist || []).find((h) => h.fps >= avg * 0.9);
+    perf.i = back ? back.i : Math.max(0, perf.i - 1);
+    perf.stuck = true; perf.downFps = 0; perf.bad = 0; perf.badSum = 0; perf.hist = [];
     return;
   }
   if (perf.bad >= 4 && perf.i < SCALE_STEPS.length - 1) {
     if (now - perf.lastUpAt < 15000) perf.upWait = Math.min(240, perf.upWait * 2);   // going up didn't hold
-    perf.downFps = perf.badSum / perf.bad;
+    perf.downFps = avg;
+    (perf.hist = perf.hist || []).push({i: perf.i, fps: avg});
     perf.i++; perf.bad = 0; perf.good = 0; perf.badSum = 0;
     console.warn("render scale down to " + SCALE_STEPS[perf.i] + " (" + fps + " fps of " + perf.hz + ")");
   } else if (perf.good >= perf.upWait && perf.i > 0) {
@@ -2624,6 +2729,8 @@ function sendPerf() {                              // every 5 s
     }
   } catch (_) {}
   if (performance.memory) m.heap = r(performance.memory.usedJSHeapSize / 1048576);
+  m.aud = r(AUDIO.bytes / 5 / 1024, 10); AUDIO.bytes = 0;     // laptop sound received, KiB/s
+  if (AUDIO.ctx) m.actx = AUDIO.ctx.state;
   if (battery) { m.bat = r(battery.level * 100); m.chg = !!battery.charging; }
   perf.frames = 0; perf.js = 0; perf.jsMax = 0; perf.long = 0; perf.ivs = []; perf.dec = 0; perf.decN = 0; perf.page = 0;
   if (!document.hidden) send(m);
@@ -2859,6 +2966,7 @@ function isStandalone() {
 }
 function begin(fromTap) {
   begun = true;
+  audioStart();
   startEl.hidden = true;
   document.getElementById("buttons").hidden = false;
   setStereo(state.stereo);
@@ -3136,7 +3244,7 @@ function runDemo() {
 if (gl) {
   resize();
   connectWs();
-  if (!DEMO || PARAMS.has("caps")) probeCaps().then((c) => { caps = c; window.__vrbCaps = c; send(Object.assign({t: "caps"}, c)); })
+  if (!DEMO || PARAMS.has("caps")) probeCaps().then((c) => { caps = applyLagCap(c); window.__vrbCaps = c; send(Object.assign({t: "caps"}, c)); })
                                             .catch((e) => console.warn("caps probe:", e && e.message));
   if (DEMO) runDemo();
   requestAnimationFrame(frame);

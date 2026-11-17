@@ -27,6 +27,7 @@ works it sends "screen" (the live page on the cinema screen, sound on the laptop
 from __future__ import annotations
 
 import argparse
+import array
 import asyncio
 import collections
 import contextlib
@@ -72,6 +73,10 @@ WIN_W, WIN_H = 1400, 900                 # real (off-screen) Brave windows: the 
 FREEZE = True                            # --no-freeze: keep background windows running
 FREEZE_AFTER = 15.0                      # seconds after leaving a window before it is frozen
 PERF_LOG = HERE / "perf.log"             # phone performance samples (JSON lines), see "perf" messages
+AUDIO_CS = HERE / "audio_capture.cs"     # Round B1: Brave's sound -> the phone (built with Windows' own csc.exe)
+AUDIO_EXE = CACHE / "audio_capture.exe"
+AUDIO_FLAG = CACHE / "laptop_muted.flag" # exists while audio_capture has the laptop speakers muted
+LAPTOP_SOUND = False                     # --laptop-sound: no sound on the phone, the laptop plays it (old way)
 TOR_WAIT = 12.0                          # seconds Brave may take to open a Tor window after Alt+Shift+N
 
 sys.path.append(str(PHONE_HOST))         # pad_relay
@@ -548,8 +553,8 @@ HOOK_JS = r"""
 PSEUDO_FS_FN = r"""function (on) {
   let st = document.getElementById('vrb-pfs');
   if (!on) {
-    for (const e of document.querySelectorAll('[data-vrb-pfs],[data-vrb-pfa]')) {
-      e.removeAttribute('data-vrb-pfs'); e.removeAttribute('data-vrb-pfa'); }
+    for (const e of document.querySelectorAll('[data-vrb-pfs],[data-vrb-pfa],[data-vrb-pfv]')) {
+      e.removeAttribute('data-vrb-pfs'); e.removeAttribute('data-vrb-pfa'); e.removeAttribute('data-vrb-pfv'); }
     if (st) st.remove();
     return true;
   }
@@ -560,11 +565,26 @@ PSEUDO_FS_FN = r"""function (on) {
       'max-height:none!important;margin:0!important;border:0!important;z-index:2147483647!important;' +
       'background:#000!important;object-fit:contain!important;transform:none!important}' +
       '[data-vrb-pfa]{z-index:2147483647!important;transform:none!important;filter:none!important;' +
-      'contain:none!important;will-change:auto!important}';
+      'contain:none!important;will-change:auto!important}' +
+      '[data-vrb-pfv]{width:100%!important;height:100%!important;max-width:none!important;' +
+      'max-height:none!important;object-fit:contain!important}';
     (document.head || document.documentElement).appendChild(st);
   }
-  this.setAttribute('data-vrb-pfs', '');
-  for (let e = this.parentElement; e; e = e.parentElement) e.setAttribute('data-vrb-pfa', '');
+  // A <video>: fill the page with its player (the wrapper the same size as the video, which holds the site's
+  // own controls: play / pause, seek, volume), the way the site's own full-screen button would.
+  let el = this;
+  if (this.tagName === 'VIDEO') {
+    const rv = this.getBoundingClientRect();
+    for (let e = this.parentElement; e && e !== document.body && e !== document.documentElement; e = e.parentElement) {
+      const r = e.getBoundingClientRect();
+      if (!rv.width || Math.abs(r.width - rv.width) > rv.width * 0.03 + 4 ||
+          Math.abs(r.height - rv.height) > rv.height * 0.2 + 8) break;
+      el = e;
+    }
+    for (let e = this; e && e !== el; e = e.parentElement) e.setAttribute('data-vrb-pfv', '');   // + wrappers between
+  }
+  el.setAttribute('data-vrb-pfs', '');
+  for (let e = el.parentElement; e; e = e.parentElement) e.setAttribute('data-vrb-pfa', '');
   return true;
 }"""
 # the main <video> of a document (same rule as HOOK_JS main(); self-contained, so it also works where no hook ran)
@@ -844,12 +864,150 @@ async def _loop_lag_monitor() -> None:
             log(f"[loop] event loop was blocked for {lag:.1f}s")
 
 
+def build_audio_helper() -> Path | None:
+    """Compile audio_capture.cs with the C# compiler that ships with Windows (.NET Framework 4)."""
+    try:
+        if AUDIO_EXE.is_file() and AUDIO_EXE.stat().st_mtime >= AUDIO_CS.stat().st_mtime:
+            return AUDIO_EXE
+        if sys.getwindowsversion().build < 19041:
+            log("[sound] Windows 10 2004 or newer is needed for the phone sound; it stays on the laptop")
+            return None
+        csc = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "csc.exe"
+        if not csc.is_file():
+            log(f"[sound] C# compiler not found ({csc}); the sound stays on the laptop")
+            return None
+        CACHE.mkdir(exist_ok=True)
+        r = subprocess.run([str(csc), "/nologo", "/optimize", f"/out:{AUDIO_EXE}", str(AUDIO_CS)],
+                           capture_output=True, text=True, timeout=120, creationflags=NO_WINDOW)
+        if r.returncode != 0 or not AUDIO_EXE.is_file():
+            log(f"[sound] could not build audio_capture.exe: {(r.stdout + r.stderr).strip()[:300]}")
+            return None
+        log("[sound] built cache/audio_capture.exe")
+        return AUDIO_EXE
+    except Exception as e:
+        log(f"[sound] audio helper unavailable: {e!r}")
+        return None
+
+
+def repair_laptop_mute() -> None:
+    """A crash while the phone had the sound left the laptop speakers muted: unmute them."""
+    if not AUDIO_FLAG.exists():
+        return
+    exe = build_audio_helper()
+    if exe:
+        r = subprocess.run([str(exe), "--unmute"], capture_output=True, timeout=20, creationflags=NO_WINDOW)
+        if r.returncode == 0:
+            log("[sound] the laptop speakers were left muted by an earlier run: unmuted")
+    AUDIO_FLAG.unlink(missing_ok=True)
+
+
+class AudioPipe:
+    """Round B1: Brave's sound (only Brave's process tree, Windows process loopback) -> every /ws/audio phone.
+    Runs while at least one phone listens; the laptop speakers are muted meanwhile (restored when it stops,
+    also when this server dies: the helper sees its stdin close)."""
+    CHUNK = 48000 * 4 // 50                            # 20 ms of 48 kHz stereo 16-bit
+
+    def __init__(self, vb: "VRBrowser") -> None:
+        self.vb = vb
+        self.listeners: set[asyncio.Queue] = set()
+        self.proc: subprocess.Popen | None = None
+        self.pid = 0
+        self.exe: Path | None = None
+        self.tried = False
+        self.loop: asyncio.AbstractEventLoop | None = None
+
+    def add(self, q: asyncio.Queue) -> None:
+        self.listeners.add(q)
+        self.ensure()
+
+    def remove(self, q: asyncio.Queue) -> None:
+        self.listeners.discard(q)
+        if not self.listeners:
+            self.stop()
+
+    def _brave_pid(self) -> int:
+        p = self.vb.cdp.proc
+        return p.pid if p is not None and p.poll() is None else 0
+
+    def ensure(self) -> None:
+        """Start (or restart after a Brave restart) the capture while phones listen."""
+        if LAPTOP_SOUND or not self.listeners:
+            return
+        pid = self._brave_pid()
+        if self.proc is not None and self.proc.poll() is None and pid == self.pid:
+            return
+        self.stop()
+        if not pid:
+            return
+        if not self.tried:
+            self.tried = True
+            self.exe = build_audio_helper()
+        if not self.exe:
+            return
+        import threading
+        self.loop = asyncio.get_running_loop()
+        try:
+            proc = subprocess.Popen([str(self.exe), str(pid), "--mute", str(AUDIO_FLAG)], stdin=subprocess.PIPE,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=NO_WINDOW)
+        except OSError as e:
+            log(f"[sound] could not start the capture: {e!r}")
+            self.exe = None
+            return
+        self.proc, self.pid = proc, pid
+        threading.Thread(target=self._read, args=(proc,), daemon=True, name="vrb-audio").start()
+        threading.Thread(target=self._errors, args=(proc,), daemon=True, name="vrb-audio-err").start()
+
+    def _read(self, proc: subprocess.Popen) -> None:
+        f, loop = proc.stdout, self.loop
+        while True:
+            b = f.read(self.CHUNK)
+            if not b:
+                break
+            a = array.array("h", b[: len(b) // 2 * 2])
+            if not a or (max(a) <= 2 and min(a) >= -2):  # silence (Windows adds +-1 dither): send nothing
+                continue
+            with contextlib.suppress(RuntimeError):    # loop closed at shutdown
+                loop.call_soon_threadsafe(self._fan, b)
+
+    @staticmethod
+    def _errors(proc: subprocess.Popen) -> None:
+        for line in proc.stderr:
+            t = line.decode("utf-8", "replace").strip()
+            if t:
+                log(f"[sound] {t.replace('audio_capture: ', '')}"[:200])
+
+    def _fan(self, b: bytes) -> None:
+        for q in list(self.listeners):
+            if q.full():                               # a slow phone: drop its oldest chunk, not everyone's
+                with contextlib.suppress(asyncio.QueueEmpty):
+                    q.get_nowait()
+            q.put_nowait(b)
+
+    def stop(self) -> None:
+        p, self.proc, self.pid = self.proc, None, 0
+        if p is None or p.poll() is not None:
+            return
+
+        def close() -> None:                           # stdin EOF = the helper unmutes the speakers and exits
+            with contextlib.suppress(Exception):
+                p.stdin.close()
+            try:
+                p.wait(3)
+            except Exception:
+                p.kill()
+                repair_laptop_mute()
+        import threading
+        threading.Thread(target=close, daemon=True).start()
+
+
 class VRBrowser:
     def __init__(self, token: str, zoom: float) -> None:
         from video_resolve import Resolver
         self.token = token
         self.zoom = zoom
         self.cdp = CDP()
+        self.audio = AudioPipe(self)
+        self._cpu_procs: dict[int, object] = {}       # psutil.Process cache for the Brave CPU figure
         self.resolver = Resolver()
         self.clients: set[Client] = set()
         self.media: dict[str, dict] = {}               # mid -> {"v","a"} | {"f"} (+ "_t", "_mesh", ...)
@@ -1241,7 +1399,16 @@ class VRBrowser:
             rec["lap_cpu"] = psutil.cpu_percent(None)
             if self.cdp.proc is not None:
                 bp = psutil.Process(self.cdp.proc.pid)
-                rec["brave_mb"] = round(sum(c.memory_info().rss for c in [bp, *bp.children(recursive=True)]) / 2**20)
+                tree = [bp, *bp.children(recursive=True)]
+                rec["brave_mb"] = round(sum(c.memory_info().rss for c in tree) / 2**20)
+                cpu, seen = 0.0, {}
+                for c in tree:                         # cpu_percent needs the same Process object each time
+                    pc = self._cpu_procs.get(c.pid) or c
+                    seen[c.pid] = pc
+                    with contextlib.suppress(Exception):
+                        cpu += pc.cpu_percent(None)
+                self._cpu_procs = seen
+                rec["brave_cpu"] = round(cpu / (psutil.cpu_count() or 1), 1)   # % of the whole laptop
         except Exception:
             pass
         rec["wins"] = len(self.tabs)
@@ -1255,7 +1422,8 @@ class VRBrowser:
             g = rec.get
             log(f"[perf] {client.ip} {g('fps')} fps (of {g('hz')}) scale {g('scale')} js {g('js')} ms "
                 f"long {g('long')} page {g('page')}/s dec {g('dec')} ms vdrop {g('vdrop')} heap {g('heap')} MB "
-                f"bat {g('bat')} | laptop cpu {g('lap_cpu')}% brave {g('brave_mb')} MB")
+                f"bat {g('bat')} sound {g('aud')} KB/s | laptop cpu {g('lap_cpu')}% brave {g('brave_cpu')}% "
+                f"{g('brave_mb')} MB")
 
     async def switch_tab(self, tid: str) -> None:
         tab = self.tabs.get(tid)
@@ -2451,10 +2619,11 @@ class VRBrowser:
             await self._pseudo_fs_owner(sid, True)
         if tor:
             await self.toast("Tor window: the video plays in the browser on the big screen (streaming it to the "
-                             "phone would bypass Tor) - the sound plays on the laptop")
+                             "phone would bypass Tor)" + (" - the sound plays on the laptop" if LAPTOP_SOUND else ""))
             log("[video] SCREEN mode (Tor window, no lookup)")
         else:
-            await self.toast("Showing the browser picture on the big screen - the sound plays on the laptop")
+            await self.toast("Showing the browser picture on the big screen"
+                             + (" - the sound plays on the laptop" if LAPTOP_SOUND else ""))
             log(f"[video] SCREEN mode: {title[:60]}")
 
     async def _pseudo_fs_owner(self, sid: str, on: bool) -> None:
@@ -2852,6 +3021,37 @@ def build_app(vb: VRBrowser, ph) -> "FastAPI":
                 t.cancel()
             log(f"[ws] phone disconnected {c.ip} ({c.frames} frames sent)")
 
+    @app.websocket("/ws/audio")
+    async def ws_audio(ws: WebSocket):
+        """Round B1: Brave's sound as raw PCM chunks (48 kHz stereo s16le, 20 ms each; silence is not sent)."""
+        origin = ws.headers.get("origin")
+        host = ws.headers.get("host", "")
+        if not key_ok(ws.query_params.get("k")) or (origin and origin != f"https://{host}"):
+            log(f"[ws] refused sound {ws.client.host if ws.client else '?'} (key or origin)")
+            await ws.close(code=1008)
+            return
+        await ws.accept()
+        q: asyncio.Queue = asyncio.Queue(maxsize=25)      # 0.5 s; a stalled phone loses old sound, not new
+        vb.audio.add(q)
+        recv = asyncio.create_task(ws.receive_text())    # ends when the phone closes the socket
+        try:
+            while True:
+                get = asyncio.create_task(q.get())
+                done, _ = await asyncio.wait({get, recv}, timeout=3, return_when=asyncio.FIRST_COMPLETED)
+                if recv in done:
+                    get.cancel()
+                    break
+                if get not in done:                      # quiet: check the capture still follows Brave
+                    get.cancel()
+                    vb.audio.ensure()
+                    continue
+                await asyncio.wait_for(ws.send_bytes(get.result()), 5)
+        except Exception:
+            pass
+        finally:
+            recv.cancel()
+            vb.audio.remove(q)
+
     def parse_range(rng: str | None, size: int) -> tuple[int, int] | None:
         m = re.fullmatch(r"\s*bytes=(\d*)-(\d*)\s*", rng or "")
         if not m or (not m.group(1) and not m.group(2)):
@@ -3042,8 +3242,12 @@ async def main_async(args) -> int:
     for f in list(CACHE.glob("cookies_*.txt")) + list(CACHE.glob("info_*.json")):   # (info_*: last-resort download)
         f.unlink(missing_ok=True)
 
+    repair_laptop_mute()
     vb = VRBrowser(token, args.zoom)
     log(f"[video] {vb.resolver.describe()}")
+    if not LAPTOP_SOUND:
+        log("[sound] browser sound plays on the phone (laptop speakers muted while a phone listens; "
+            "--laptop-sound keeps it on the laptop)")
     await vb.start()
     import pad_relay
     pad_relay.start()
@@ -3083,6 +3287,7 @@ async def main_async(args) -> int:
         while me is not None and me.cancelling():
             me.uncancel()
         try:
+            vb.audio.stop()
             await asyncio.wait_for(vb.shutdown(), 20)
         except BaseException as e:            # noqa: BLE001 - last resort: the job object kills Brave
             log(f"[browser] clean shutdown failed: {e!r}")
@@ -3099,11 +3304,14 @@ def main() -> None:
     ap.add_argument("--no-keyboard", action="store_true", help="do not open the laptop typing window")
     ap.add_argument("--headless", action="store_true",
                     help="old mode: headless Brave instead of the hidden off-screen window (no Tor windows)")
+    ap.add_argument("--laptop-sound", action="store_true",
+                    help="browser sound plays on the laptop (not streamed to the phone; speakers not muted)")
     ap.add_argument("--no-freeze", action="store_true", help="keep background windows running (no pausing)")
     ap.add_argument("--profile", help="Brave profile folder (default vr_browser_test/profile; for tests)")
     args = ap.parse_args()
-    global HEADLESS, PROFILE, FREEZE
+    global HEADLESS, PROFILE, FREEZE, LAPTOP_SOUND
     HEADLESS = bool(args.headless)
+    LAPTOP_SOUND = bool(args.laptop_sound)
     FREEZE = not args.no_freeze
     if args.profile:
         PROFILE = Path(args.profile).resolve()

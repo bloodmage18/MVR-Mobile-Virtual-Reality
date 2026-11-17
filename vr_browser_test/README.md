@@ -74,8 +74,8 @@ Brave's own **"New private window with Tor"** (the same as Alt+Shift+N in Brave)
 - **Limits:** it is slower than normal browsing (all traffic goes through Tor), Brave's Tor protections
   apply (some sites block Tor or show captchas), you are not signed in to anything there.
 - **Videos in a Tor window are not streamed to the phone** (that would fetch them from the laptop's own
-  connection and show your real IP). X shows the browser picture on the cinema screen instead, with the
-  sound on the laptop; it can be choppy.
+  connection and show your real IP). X shows the browser picture on the cinema screen instead (sound on the
+  phone, see Sound); it can be choppy.
 - No cookies of a Tor window are ever used by the server, and Tor-window addresses are not written to the log.
   The server's page helpers (video and text-field detection) run hidden from the sites in a Tor window, so a
   site cannot tell this setup apart from any other Brave Tor window. If Brave restarts by itself, the page
@@ -94,14 +94,31 @@ Brave's own **"New private window with Tor"** (the same as Alt+Shift+N in Brave)
 - 3D videos (side by side, top/bottom, VR180, 3D 360) are detected; if one still looks split, press Y.
   Your choice is remembered for that video.
 - Sites the phone can't stream: the laptop downloads the video first (with a progress bar), or, for
-  protected video, the phone shows the live browser picture on the cinema screen and the **sound plays on the laptop**.
+  protected video, the phone shows the live browser picture on the cinema screen, with the site's own player controls.
 - When you go back with B, the browser video jumps to where you stopped watching.
+
+## Sound
+
+- **All browser sound plays on the phone** (earbuds): pages, sites that play on the cinema screen, Tor windows.
+  Only Brave's own sound is captured on the laptop (Windows 10 2004+ "process loopback"), never other apps or
+  the microphone, and it never touches the network, so it is safe for Tor windows.
+- While a phone is connected the **laptop speakers are muted**; they are unmuted when the phone disconnects or
+  the server stops (also after a crash: the next start unmutes them).
+- The helper `audio_capture.exe` is built automatically on first use from `audio_capture.cs` with the C#
+  compiler that comes with Windows (into `cache\`).
+- `--laptop-sound` keeps the sound on the laptop (the old way); `?audio=0` in the phone address turns it off
+  for that phone.
+- Delay is about 0.1-0.2 s, close to the browser picture's own delay.
 
 ## Performance (low-end phones)
 
+- **Video quality memory:** when a phone can't keep up with a video quality (e.g. the A08 with 4K), it
+  remembers that for 14 days and starts the next videos one step lower (1440p) instead of stuttering first.
+
 - **Auto resolution:** when the phone can't keep up (it gets warm, or a heavy video plays), it draws fewer
   pixels (scale 1 -> 0.85 -> 0.72 -> 0.6) instead of stuttering, and goes back up after a long smooth spell.
-  If fewer pixels don't help (battery saver's 60 Hz cap), it changes nothing. `?scale=0.8` in the address
+  If fewer pixels don't help (battery saver's 60 Hz cap, iPhone Low Power Mode's 30 fps), it goes back to full
+  sharpness and stays there. `?scale=0.8` in the address
   fixes the scale.
 - **Background windows pause:** 15 s after you leave a window it is paused on the laptop (its scripts and
   animations stop); it wakes up when you switch back. `--no-freeze` keeps them running.
