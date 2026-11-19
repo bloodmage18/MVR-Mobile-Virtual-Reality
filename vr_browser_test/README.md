@@ -40,13 +40,13 @@ and buttons Back, Home (YouTube), New window, Play in VR. They act on the window
 | LB / RB | back (hold LB: new Tor window) / forward | move the player-bar highlight | shift / symbols |
 | LT / RT | previous / next window | | caret left / right (close the keyboard to switch windows) |
 | L3 (press left stick) | keyboard on / off | keyboard on / off | close keyboard |
-| R3 (press right stick) | new window (hold: close window) | | nothing (close the keyboard first) |
+| R3 (press right stick) | new window (hold: close window) | move / resize the big screen | nothing (close the keyboard first) |
 | Left stick | scroll | screen size (flat videos) | move key highlight |
 | D-pad up/down | scroll | | move key highlight |
 | D-pad left/right | arrow keys | −10 s / +10 s | move key highlight |
 | Right stick | nudge the pointer | turn the view | nudge the pointer |
-| Start | re-centre the view | re-centre the view | enter / go |
-| View (Back) | lens settings (d-pad tunes, A/B/View close) | lens settings | lens settings |
+| Start | tap: re-centre the view (also up/down); hold 1 s: Home (planets) | same | enter / go |
+| View (Back) | lens settings (a card in both eyes: d-pad tunes, Y resets, A/B/View close) | lens settings | lens settings |
 
 You point by looking: a small ring shows where you point. Touch: tap = click / play-pause, double tap = re-centre, drag = turn.
 The top of the browser shows which controller is active ("Pad: laptop", "Pad: phone ..." or "No controller").
@@ -80,11 +80,31 @@ Brave's own **"New private window with Tor"** (the same as Alt+Shift+N in Brave)
   The server's page helpers (video and text-field detection) run hidden from the sites in a Tor window, so a
   site cannot tell this setup apart from any other Brave Tor window. If Brave restarts by itself, the page
   of a Tor window is not reopened (the restarted window is the normal, signed-in one).
-- On the cinema screen a video fills the page instead of going truly full screen (true full screen would put
-  the hidden Brave window on the laptop's monitor). If a site goes full screen by itself (YouTube's F key),
-  the window is pushed straight back off the monitor; you may see a very short flash on the laptop.
+- A site's own full-screen button works here too: the player fills the big screen (Brave's real full screen is
+  ended at once, so the hidden window doesn't stay on the laptop's monitor; you may see a very short flash).
 - Tor windows need the normal mode: they are not available when the server runs with `--headless`
   (the old hidden mode without a real window, kept as a fallback: `python vr_browser_test\server.py --headless`).
+
+## Home (planets)
+
+Hold **Start** for about a second: the browser fades away and you float in space with your apps as planets
+in front of you (two rows of three). Look at one (or move with the d-pad) and press **A**; **B** or holding
+Start again closes it.
+
+- **Browser**: back to the browser (also leaves a video).
+- **Tor**: opens a new private window with Tor.
+- **Theater, Gallery, Games, Desktop**: coming soon.
+
+The phone draws the planets itself, so they cost the laptop nothing.
+
+## Full screen and the big screen
+
+- **A site's own full-screen button** (or F, or a double-click on a player) puts that player on the big
+  screen, with the site's controls (play / pause, seek, volume). It also works for embedded players (a
+  video from another site inside a page). The site's exit button or Esc brings you back to the browser; so does B.
+- **R3 on the big screen** (live page or a flat video): move the screen with the left stick or d-pad:
+  up / down = farther / closer, left / right = smaller / bigger. R3 or B = done. It is remembered.
+- **Start re-centres up/down too**: where you look becomes straight ahead, also when you lie down or recline.
 
 ## Videos
 

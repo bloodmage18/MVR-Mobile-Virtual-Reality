@@ -521,6 +521,13 @@ HOOK_JS = r"""
     Object.defineProperty(window, '__vrbMain', {value: main});
     Object.defineProperty(window, '__vrbInfo', {value: () => info(main(), 'query')});
   } catch (_) {}
+  // B2: the site's own full-screen button (also from inside an embedded player: the top document then has the
+  // <iframe> as its fullscreenElement). Reported from the top document only; the phone shows the big screen.
+  document.addEventListener('fullscreenchange', () => {
+    grab();
+    try { if (playB) playB(JSON.stringify({kind: 'fs', on: !!document.fullscreenElement, top: window === window.top,
+          title: String(document.title || '').slice(0, 300)})); } catch (_) {}
+  }, true);
   addEventListener('play', e => {
     const v = (e.composedPath && e.composedPath()[0]) || e.target;
     if (!(v instanceof HTMLVideoElement)) return;
@@ -587,6 +594,57 @@ PSEUDO_FS_FN = r"""function (on) {
   for (let e = el.parentElement; e; e = e.parentElement) e.setAttribute('data-vrb-pfa', '');
   return true;
 }"""
+# B2: the Fullscreen API, emulated in the page (normal windows only; every frame). A site's full-screen button
+# makes its player fill the page and the site sees a normal full screen (fullscreenElement, fullscreenchange,
+# its own exit button and Esc work). Brave itself never goes full screen: a real one is often refused for the
+# hidden window ("not granted"), flashes on the laptop's monitor and takes the keyboard focus.
+# Not in Tor windows: replaced built-in functions would make this setup recognisable to sites there.
+FS_EMU_JS = r"""
+(() => {
+  if (window.__vrbFsEmu) return;
+  try { Object.defineProperty(window, '__vrbFsEmu', {value: true}); } catch (_) { return; }
+  const PFS = """ + PSEUDO_FS_FN + r""";
+  let cur = null;
+  const fire = (el) => {                     // like the real one: at the element, bubbling up to the document
+    for (const n of ['fullscreenchange', 'webkitfullscreenchange'])
+      try { el.dispatchEvent(new Event(n, {bubbles: true, composed: true})); } catch (_) {}
+  };
+  function enter() {
+    const el = this;
+    if (!(el instanceof Element)) return Promise.reject(new TypeError('Not an element'));
+    if (cur === el) return Promise.resolve();
+    PFS.call(document.documentElement, false);
+    cur = el;
+    PFS.call(el, true);
+    setTimeout(() => fire(el), 0);
+    return Promise.resolve();
+  }
+  function exit() {
+    if (!cur) return Promise.reject(new TypeError('Document not active'));
+    const el = cur; cur = null;
+    PFS.call(document.documentElement, false);
+    setTimeout(() => fire(el.isConnected ? el : document), 0);
+    return Promise.resolve();
+  }
+  const def = (o, n, v) => { try { Object.defineProperty(o, n, {value: v, configurable: true, writable: true}); } catch (_) {} };
+  const get = (o, n, f) => { try { Object.defineProperty(o, n, {get: f, configurable: true}); } catch (_) {} };
+  def(Element.prototype, 'requestFullscreen', enter);
+  def(Element.prototype, 'webkitRequestFullscreen', function () { enter.call(this); });
+  def(Element.prototype, 'webkitRequestFullScreen', function () { enter.call(this); });
+  def(Document.prototype, 'exitFullscreen', exit);
+  def(Document.prototype, 'webkitExitFullscreen', function () { exit().catch(() => {}); });
+  def(Document.prototype, 'webkitCancelFullScreen', function () { exit().catch(() => {}); });
+  const curEl = () => (cur && cur.isConnected ? cur : null);
+  get(Document.prototype, 'fullscreenElement', curEl);
+  get(Document.prototype, 'webkitFullscreenElement', curEl);
+  get(Document.prototype, 'webkitCurrentFullScreenElement', curEl);
+  get(Document.prototype, 'fullscreen', () => !!curEl());
+  get(Document.prototype, 'webkitIsFullScreen', () => !!curEl());
+  get(Document.prototype, 'fullscreenEnabled', () => true);
+  get(Document.prototype, 'webkitFullscreenEnabled', () => true);
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && cur) exit().catch(() => {}); }, true);
+})();
+"""
 # the main <video> of a document (same rule as HOOK_JS main(); self-contained, so it also works where no hook ran)
 MAIN_VIDEO_JS = ("(() => { let best = null, score = -1; for (const v of document.querySelectorAll('video')) {"
                  " const r = v.getBoundingClientRect(); const s = r.width * r.height + (v.paused ? 0 : 1e7);"
@@ -1028,6 +1086,8 @@ class VRBrowser:
         self.mode = "browse"                          # browse | resolving | vr | screen
         self.video_msg: dict | None = None            # last "ready"/"screen" message (for reconnects)
         self.video_session = ""
+        self.fs_screen = False                        # screen mode because the site went full screen (B2)
+        self.fs_ignore_off = 0.0                      # Tor: our own exitFullscreen (real -> page-filling) until then
         self.resolve_task: asyncio.Task | None = None
         self.resolve_key = ""                         # which video the running resolve is for
         self.resolve_top = ""                         # top page URL when it started
@@ -1151,9 +1211,7 @@ class VRBrowser:
             if HEADLESS:        # a real window already sends Brave's own user agent (and client hints)
                 await self.cdp.call("Network.setUserAgentOverride", {"userAgent": self.ua}, session=s)
             await self.cdp.call("Emulation.setFocusEmulationEnabled", {"enabled": True}, session=s)
-            z = max(0.5, min(3.0, self.zoom))
-            await self.cdp.call("Emulation.setDeviceMetricsOverride", {
-                "width": round(W / z), "height": round(H / z), "deviceScaleFactor": z, "mobile": False}, session=s)
+            await self._metrics(s)
             await self._hook(s, tor)
             await self.cdp.call("Target.setAutoAttach", {"autoAttach": True, "waitForDebuggerOnStart": True,
                                                          "flatten": True}, session=s)
@@ -1185,6 +1243,23 @@ class VRBrowser:
         if tab is not None and tab.tor:
             return "<Tor window>"
         return str(url)[:n]
+
+    async def _metrics(self, s: str) -> None:
+        """The page area the phone sees: W x H screencast pixels (W/zoom x H/zoom CSS pixels)."""
+        z = max(0.5, min(3.0, self.zoom))
+        await self.cdp.call("Emulation.setDeviceMetricsOverride", {
+            "width": round(W / z), "height": round(H / z), "deviceScaleFactor": z, "mobile": False}, session=s)
+
+    async def _refit(self, tab: "Tab") -> None:
+        """After a real full screen (Tor windows): the window back in its parked place and size, and the page
+        area re-set (a full screen leaves the picture bigger than the page: the page in one corner)."""
+        for delay in (0.5, 1.0):
+            await asyncio.sleep(delay)
+            if tab.id not in self.tabs or not tab.session:
+                return
+            await self._park(tab.target, sweep=False)
+            with contextlib.suppress(Exception):
+                await self._metrics(tab.session)
 
     async def _park(self, target_id: str, sweep: bool = True) -> None:
         """Keep the real Brave window of a target off-screen (never minimized: that stops the screencast)."""
@@ -1477,16 +1552,17 @@ class VRBrowser:
         has would let sites recognise this user across Tor circuits)."""
         await self.cdp.call("Runtime.enable", session=s)         # bindings survive navigations only with this
         world = {"worldName": VRB_WORLD} if tor else {}
+        src = HOOK_JS if tor else FS_EMU_JS + HOOK_JS           # B2: emulated full screen (normal windows)
         for name in ("__vrbPlay", "__vrbFocus"):
             await self.cdp.call("Runtime.addBinding", {"name": name, **(
                 {"executionContextName": VRB_WORLD} if tor else {})}, session=s)
         try:
             await self.cdp.call("Page.addScriptToEvaluateOnNewDocument",
-                                {"source": HOOK_JS, "runImmediately": True, **world}, session=s)
+                                {"source": src, "runImmediately": True, **world}, session=s)
         except Exception:
-            await self.cdp.call("Page.addScriptToEvaluateOnNewDocument", {"source": HOOK_JS, **world}, session=s)
+            await self.cdp.call("Page.addScriptToEvaluateOnNewDocument", {"source": src, **world}, session=s)
         with contextlib.suppress(Exception):
-            await self._eval(s, HOOK_JS, tor=tor)
+            await self._eval(s, src, tor=tor)
 
     async def _eval(self, s: str, expr: str, tor: bool | None = None, **kw) -> dict | None:
         """Runtime.evaluate (returnByValue) in a session's page; for a Tor window in its isolated VRB_WORLD
@@ -1649,6 +1725,8 @@ class VRBrowser:
             fr = p.get("frame", {})
             if not fr.get("parentId"):
                 tab.url = fr.get("url", tab.url)
+                if self.fs_screen and self.mode == "screen" and self._owns_video(tab):   # a new page ends full screen
+                    asyncio.create_task(self._on_fullscreen(tab, False, ""))
                 if tab.focus is not None:              # the focused field went with the old document
                     tab.focus = None
                     tab.focus_seq += 1
@@ -1927,6 +2005,10 @@ class VRBrowser:
             x, y = self._xy(m)
             btn = "right" if m.get("button") == "right" else "left"
             self.last_click = time.monotonic()
+            if self.tab is not None and self.tab.tor and not HEADLESS:
+                # B2: Brave refuses a Tor window's full screen ("not granted") unless that window is its active
+                # one; a site's full-screen button (a real full screen there: no emulation in Tor windows) then works
+                await self._safe("Page.bringToFront", session=self.tab.session, timeout=5)
             await self._safe("Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": y})
             for typ in ("mousePressed", "mouseReleased"):
                 await self._safe("Input.dispatchMouseEvent", {"type": typ, "x": x, "y": y, "button": btn,
@@ -2070,6 +2152,15 @@ class VRBrowser:
         if not isinstance(d, dict):
             return
         tab = self.sess_tab.get(sid)
+        if d.get("kind") == "fs":
+            # top document: its own full screen (Tor: also the real one of an embedded player, whose <iframe> is
+            # then the top document's fullscreenElement). An embedded player's emulated one (normal windows)
+            # comes from its frame: its <iframe> is made to fill the page too.
+            top = d.get("top") is not False
+            if tab is not None and tab.id == self.active and (top or not tab.tor):
+                asyncio.create_task(self._on_fullscreen(tab, bool(d.get("on")), str(d.get("title") or ""),
+                                                        sid, top))
+            return
         lpage = self._lurl(tab, str(d.get("page", "")), 100)        # what the log may show of the page
         if tab is not None and tab.id != self.active:
             asyncio.create_task(self._safe("Runtime.evaluate", {"expression": PAUSE_JS}, session=sid, timeout=5))
@@ -2602,6 +2693,7 @@ class VRBrowser:
 
     async def _screen(self, title: str, tor: bool = False) -> None:
         self.mode = "screen"
+        self.fs_screen = False
         msg = {"t": "video", "state": "screen", "title": title}
         self.video_msg = msg
         self.suppress_until = time.monotonic() + 3
@@ -2625,6 +2717,45 @@ class VRBrowser:
             await self.toast("Showing the browser picture on the big screen"
                              + (" - the sound plays on the laptop" if LAPTOP_SOUND else ""))
             log(f"[video] SCREEN mode: {title[:60]}")
+
+    async def _on_fullscreen(self, tab: Tab, on: bool, title: str, sid: str = "", top: bool = True) -> None:
+        """B2: the site's own full-screen button (or F key, double-click, an embedded player's button). Brave
+        really goes full screen (its window is kept off the monitor by the window guard) and the page then
+        fills the browser picture: the phone shows that picture on the big screen. The site's own exit
+        button (or Esc) brings the phone back to the browser; B on the phone ends the site's full screen."""
+        if on and tab.tor and not HEADLESS:
+            # Tor window (no emulation there): Brave went really full screen. That gives the hidden window the
+            # monitor's size (the picture only fills part of the big screen) and flashes on the laptop: make
+            # the same element fill the page instead, then end the real full screen.
+            self.fs_ignore_off = time.monotonic() + 3
+            await self._eval(tab.session, f"(() => {{ const el = document.fullscreenElement; if (!el) return false;"
+                             f" const f = {PSEUDO_FS_FN}; f.call(document.documentElement, false); f.call(el, true);"
+                             f" document.exitFullscreen().catch(() => {{}}); return true; }})()")
+            asyncio.create_task(self._refit(tab))
+        if on:
+            if self.mode != "browse":                  # VR (page paused) / resolving / already on the big screen
+                return
+            self.mode = "screen"
+            self.fs_screen = True
+            self.video_session = sid or tab.session
+            if not top and not HEADLESS:
+                await self._pseudo_fs_owner(self.video_session, True)   # the <iframe> fills the page
+                title = tab.title
+            title = re.sub(r"\s*-\s*YouTube$", "", re.sub(r"^\(\d+\)\s*", "", title)) or "Full screen"
+            msg = {"t": "video", "state": "screen", "title": title}
+            self.video_msg = msg
+            await self.broadcast(msg)
+            await self.update_cast()
+            log(f"[video] the page went full screen: big screen ({self._lurl(tab, tab.url, 80)})")
+        elif self.mode == "screen" and self.fs_screen and self._owns_video(tab)                 and (not sid or sid == self.video_session) and time.monotonic() > self.fs_ignore_off:
+            if not top and not HEADLESS:
+                await self._pseudo_fs_owner(self.video_session, False)
+            self.fs_screen = False
+            self.mode = "browse"
+            self.video_msg = None
+            await self.broadcast({"t": "video", "state": "exit"})
+            await self.update_cast()
+            log("[video] the page left full screen: back to the browser")
 
     async def _pseudo_fs_owner(self, sid: str, on: bool) -> None:
         """Screen mode for a video in an iframe (an embedded player, its own session): the <iframe> element in
@@ -2651,18 +2782,19 @@ class VRBrowser:
             self.resolve_task.cancel()
         was = self.mode
         self.mode = "browse"
+        self.fs_screen = False
         self.video_msg = None
         self.cur_play = None
         self.suppress_until = time.monotonic() + 2.5
-        js = f"(() => {{ ({PSEUDO_FS_FN}).call(document.documentElement, false); const v = {MAIN_VIDEO_JS}; if (!v) return false;"
+        js = (f"(() => {{ try {{ if (document.fullscreenElement) document.exitFullscreen(); }} catch (_) {{}}"
+              f" ({PSEUDO_FS_FN}).call(document.documentElement, false); const v = {MAIN_VIDEO_JS}; if (!v) return false;")
         try:
             t = float(at) if at is not None else None
         except (TypeError, ValueError):
             t = None
         if t is not None and t >= 0:
             js += f" try {{ v.currentTime = {t:.3f}; }} catch (_) {{}}"
-        js += (" try { v.pause(); } catch (_) {}"
-               " try { if (document.fullscreenElement) document.exitFullscreen(); } catch (_) {} return true; })()")
+        js += " try { v.pause(); } catch (_) {} return true; })()"
         if was != "browse":
             sid = self.video_session or self.session
             await self._eval(sid, js, userGesture=True)

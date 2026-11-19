@@ -48,6 +48,7 @@
   .cross::after { top: 31px; left: 0; height: 3px; width: 64px; }
   #lensPanel { position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%); z-index: 6; background: rgba(12,14,24,.94);
                color: #eee; padding: 14px 18px; border-radius: 14px; font: 600 16px system-ui, sans-serif; width: min(92vw, 520px); }
+  body.stereo #lensPanel { visibility: hidden; }   /* in the headset: the lens card is drawn in 3D, in each eye */
   #lensPanel label { display: block; margin: 6px 0; }
   #lensPanel input[type=range] { width: 100%; height: 34px; }
   #lensPanel .row { display: flex; gap: 8px; justify-content: space-between; margin-top: 6px; }
@@ -192,7 +193,7 @@ function setLens(o, show = true) {
   try { localStorage.setItem("pvr_lens", JSON.stringify({offset: lens.offset, fov: lens.fov})); } catch (_) {}
   syncLensUi(); layoutHud();
   showCrosses(lensPanel.hidden ? 4000 : 0);
-  if (show) hint(`separation ${lens.offset.toFixed(3)}   fov ${lens.fov}`, 2500);
+  if (show && !state.stereo) hint(`separation ${lens.offset.toFixed(3)}   fov ${lens.fov}`, 2500);   // flat: not in the headset
   scheduleHello();
 }
 function showCrosses(ms) {
@@ -621,9 +622,20 @@ function setUserSpan(d) {
   clearTimeout(spanSaveTimer);
   spanSaveTimer = setTimeout(() => { try { localStorage.setItem("vrb_span", String(Math.round(userSpan * 10) / 10)); } catch (_) {} }, 400);
 }
+// B2: screen distance (R3 in full screen). The size (span) is the screen's width as seen from the default 5 m,
+// so moving it back makes it look smaller, like walking away from a real screen.
+const DIST_MIN = 2.5, DIST_MAX = 15;
+let userDist = CINEMA_R;
+try { const s = parseFloat(localStorage.getItem("vrb_dist")); if (s >= DIST_MIN && s <= DIST_MAX) userDist = s; } catch (_) {}
+let distSaveTimer = null;
+function setUserDist(d) {
+  userDist = clamp(d, DIST_MIN, DIST_MAX);
+  clearTimeout(distSaveTimer);
+  distSaveTimer = setTimeout(() => { try { localStorage.setItem("vrb_dist", String(Math.round(userDist * 10) / 10)); } catch (_) {} }, 400);
+}
 function cinemaParams(aspect) {
-  const R = CINEMA_R, hMax = 2 * R * Math.tan(36 * deg);
-  let w = R * cinemaSpan(), h = w / aspect;
+  const R = userDist, hMax = 2 * R * Math.tan(36 * deg);
+  let w = Math.min(CINEMA_R * cinemaSpan(), R * 170 * deg), h = w / aspect;
   if (h > hMax) { h = hMax; w = h * aspect; }              // tall / portrait videos: limit the height
   return {d: R, w, h, k: 1, y: -0.2};
 }
@@ -711,8 +723,19 @@ function setHead(H) {
   state.H = H;
   if (state.needRecenter) { recenter(true); state.needRecenter = false; }
 }
+// B2: recentre turns AND tilts the world: where you look becomes straight ahead, also up/down (lying down,
+// reclining). Head roll is kept (the horizon stays level with your head as before).
+function headYawPitchOf(H) {
+  const f = [-H[0][2], -H[1][2], -H[2][2]], u = [H[0][1], H[1][1], H[2][1]];   // forward, head-up
+  const sp = clamp(f[1], -1, 1);
+  // level "forward": where you look; looking (almost) straight up / down: from the top of the head instead
+  const h = Math.hypot(f[0], f[2]) > 0.3 ? [f[0], f[2]] : [-Math.sign(sp) * u[0], -Math.sign(sp) * u[2]];            // level "forward", also when looking straight up/down
+  return {yaw: Math.atan2(-h[0], -h[1]), pitch: Math.asin(sp)};
+}
 function recenter(quiet) {
-  state.yawOffset = state.H ? -headYawOf(state.H) : 0;
+  const yp = state.H ? headYawPitchOf(state.H) : {yaw: 0, pitch: 0};
+  state.yawOffset = -yp.yaw;
+  state.pitchOffset = -yp.pitch;
   state.bodyYaw = 0;
   state.curYaw = 0; state.curPitch = 0;
   if (!quiet) { hint("Recentered", 1200); if (state.mode === "vr" && !isCinema(state.proj)) { bar.yaw = 0; kb.yaw = kb.inVr ? 0 : kb.yaw; } }
@@ -1133,7 +1156,7 @@ function onVideoMsg(m) {
       if (state.mode === "vr") stopVideo();
       setMode("screen");
       if (kb.open && !kb.inVr) kbClose();
-      hudShow({title: m.title || "Video", text: "Playing on the big screen (sound on the laptop). B = back"}, 5000);
+      hudShow({title: m.title || "Video", text: "Playing on the big screen. B = back, R3 = move / resize the screen"}, 5000);
       break;
     case "error":
       if (state.mode === "vr") stopVideo();
@@ -2385,6 +2408,12 @@ function updatePointer(R) {
   state.ptrTarget = null; state.ptrHit = null; state.chromeHit = null;
   bar.onBar = false;
   let barBtn = -1, barU = 0;
+  if (launcher.open) {                           // the planets take the gaze; nothing behind them is pointed at
+    const h = launcherGaze(o, dir);
+    if (h) { state.ptrTarget = "launcher"; state.ptrHit = {p: h.p, t: h.t}; }
+    state.ptr = null;
+    return;
+  }
   if (kb.open) {
     const h = hitQuad(kbQuad(), o, dir);
     if (h) { state.ptrTarget = "kbd"; state.ptrHit = {p: h.p, t: h.t}; kbGaze(h, dir); }
@@ -2492,18 +2521,44 @@ function uiActivity(b) {                         // every input wakes the UI (D1
   if (state.mode === "vr" && b !== 2 && !kb.open) barShow(4000);
 }
 function closeLens() { lensPanel.hidden = true; crossL.hidden = true; crossR.hidden = true; }
+// ── B2: R3 in full screen (cinema screen) = screen adjust: distance and size ──
+let scrAdj = false;
+function fullScreenView() { return state.mode === "screen" || (state.mode === "vr" && isCinema(state.proj)); }
+let scrAdjKey = "";
+function scrAdjShow() {
+  const title = `Screen: ${userDist.toFixed(1)} m away, size ${Math.round(cinemaSpan() / deg)}°`;
+  if (title === scrAdjKey && hud3.until === Infinity) return;      // redraw the HUD only when the numbers change
+  scrAdjKey = title;
+  hudShow({title,
+           text: "Left stick / d-pad: ↑↓ farther / closer, ←→ smaller / bigger.  R3 or B = done"}, Infinity);
+}
+function scrAdjToggle(on) {
+  scrAdj = on;
+  if (on) scrAdjShow(); else hudHide();
+}
+function scrAdjButton(b) {                       // true = handled
+  if (!fullScreenView()) { scrAdj = false; return false; }
+  if (b === 8 || b === 1 || b === 0) { scrAdjToggle(false); return true; }
+  if (b === 11 || b === 12) { setUserDist(userDist + (b === 11 ? 0.5 : -0.5)); scrAdjShow(); return true; }
+  if (b === 13 || b === 14) { setUserSpan(cinemaSpan() / deg + (b === 14 ? 5 : -5)); scrAdjShow(); return true; }
+  return b !== 6 && b !== 4;                     // Start (recentre) and View (lens) still work
+}
 function onButton(b) {
   if (!lensPanel.hidden) {                       // lens tuning with the headset on; A, B or View closes it
     if (b === 14) { setLens({doffset: 0.005}); return; }
     if (b === 13) { setLens({doffset: -0.005}); return; }
     if (b === 11) { setLens({dfov: 2}); return; }
     if (b === 12) { setLens({dfov: -2}); return; }
+    if (b === 3) { setLens({reset: true}); return; }
     if (b === 0 || b === 1 || b === 4) { closeLens(); return; }
   }
   if (b === 4) { toggleLensPanel(); return; }
+  if (launcher.open && b !== 6 && b !== 4) { launcherButton(b); return; }
+  if (scrAdj && scrAdjButton(b)) return;
   if (b === 7) { kbToggle(); return; }           // L3: keyboard on / off, in every mode
   if (kb.open && kbButton(b)) return;
-  if (b === 6) { recenter(); return; }
+  if (b === 8 && fullScreenView()) { scrAdjToggle(true); return; }   // R3: move / resize the big screen
+  if (b === 6) { startHold = {done: false}; return; }   // tap = recentre (on release), hold = home (planets)
   if (state.mode === "vr") {
     switch (b) {
       case 0: pressA(); break;
@@ -2545,7 +2600,9 @@ function onButton(b) {
     case 16: switchWindow(1); break;
   }
 }
+let startHold = null;
 function onButtonHeld(b, held, now) {
+  if (b === 6 && startHold && !startHold.done && held >= 800) { startHold.done = true; launcherToggle(!launcher.open); return; }
   if (b === 8 && r3 && !r3.done && state.mode === "browser") {
     if (held >= 300 && !r3.warned) { r3.warned = true; hudShow({title: "Hold to close the window…", text: ""}, 900); }
     if (held >= 800) { r3.done = true; closeWindow(); }
@@ -2566,6 +2623,10 @@ function onButtonHeld(b, held, now) {
   }
 }
 function onButtonUp(b, held) {
+  if (b === 6) {                                 // released before the hold fired (a slow frame): decide by time
+    const s = startHold; startHold = null;
+    if (s && !s.done) { if (held >= 800) launcherToggle(!launcher.open); else recenter(); }
+  }
   if (b === 8) {
     const r = r3; r3 = null;
     if (r && !r.done && held < 800 && state.mode === "browser") { if (r.warned) hudHide(); newWindow(); }
@@ -2598,6 +2659,16 @@ function pollPads(dt) {
     return;
   }
   stick.dir = 0;
+  if (scrAdj && !fullScreenView()) scrAdjToggle(false);
+  if (scrAdj) {                                              // R3 screen adjust: up = farther, right = bigger
+    if (p.ly || p.lx) {
+      if (p.ly) setUserDist(userDist - p.ly * 3 * dt);
+      if (p.lx) setUserSpan(cinemaSpan() / deg + p.lx * 40 * dt);
+      scrAdjShow();
+    }
+    if (state.mode === "vr") state.bodyYaw -= p.rx * 1.8 * dt;
+    return;
+  }
   if (state.mode === "vr") {
     state.bodyYaw -= p.rx * 1.8 * dt;                         // right stick turns (360 videos / no-gyro phones)
     if (isCinema(state.proj) && p.ly) setUserSpan(cinemaSpan() / deg - p.ly * 52 * dt);   // ~52°/s
@@ -2664,6 +2735,7 @@ document.getElementById("lensReset").addEventListener("click", () => setLens({re
 document.getElementById("lensClose").addEventListener("click", closeLens);
 function setStereo(on) {
   state.stereo = on;
+  document.body.classList.toggle("stereo", !!on);
   document.getElementById("divider").hidden = !on;
   btnMode.textContent = on ? "Mono" : "Stereo";
   layoutHud(); showHud(3000);
@@ -2748,7 +2820,7 @@ function resize() {
 }
 function currentRotation() {
   const H = state.H || rotX(fixedPitch);
-  return mul3(rotY(state.bodyYaw + state.yawOffset), H);
+  return mul3(rotY(state.bodyYaw), mul3(rotX(state.pitchOffset || 0), mul3(rotY(state.yawOffset), H)));
 }
 function drawMesh(mesh, model) {
   gl.uniformMatrix4fv(U.uModel, false, model);
@@ -2762,6 +2834,119 @@ function setScreen(P) {
   gl.uniform1f(U.uScrY, P.y);
 }
 function bindTex(T) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, T.tex); }
+// ── Home: the app launcher (hold Start). Planets float in an arc in front of you; look at one (or d-pad
+// left / right) and press A. The phone draws them: no work for the laptop.
+const APPS = [
+  {id: "browser", name: "Browser", c: ["#8fd0ff", "#2a6fd6", "#0b2a66"]},
+  {id: "tor", name: "Tor", c: ["#d9b8ff", "#7b3fe4", "#2a0d63"]},
+  {id: "theater", name: "Theater", c: ["#ffc29a", "#e2582a", "#5c1606"], ring: true},
+  {id: "gallery", name: "Gallery", c: ["#b6ffd8", "#21b36b", "#063d22"]},
+  {id: "games", name: "Games", c: ["#fff0a0", "#e0a81c", "#5a3a00"], ring: true},
+  {id: "desktop", name: "Desktop", c: ["#eef1f7", "#8a93a6", "#262b36"]},
+];
+const launcher = {open: false, a: 0, yaw: 0, hi: -1, hiSrc: "", ui: []};
+function planetDraw(i) {
+  const app = APPS[i], U = launcher.ui[i] || (launcher.ui[i] = uiCanvas(512, 640)), g = U.g, on = launcher.hi === i;
+  const key = on ? "on" : "off";
+  if (U.key === key) return;
+  U.key = key;
+  g.clearRect(0, 0, 512, 640);
+  const cx = 256, cy = 256, r = 190;
+  if (on) {                                       // glow
+    const glow = g.createRadialGradient(cx, cy, r * 0.9, cx, cy, r * 1.32);
+    glow.addColorStop(0, app.c[1] + "aa"); glow.addColorStop(1, app.c[1] + "00");
+    g.fillStyle = glow; g.beginPath(); g.arc(cx, cy, r * 1.32, 0, 2 * Math.PI); g.fill();
+  }
+  const ring = (front) => {                       // a tilted ring: back half behind the planet, front half over it
+    g.save(); g.translate(cx, cy); g.rotate(-0.35); g.scale(1, 0.28);
+    g.strokeStyle = app.c[0]; g.globalAlpha = 0.85; g.lineWidth = 22;
+    g.beginPath(); g.arc(0, 0, r * 1.25, front ? 0 : Math.PI, front ? Math.PI : 2 * Math.PI); g.stroke();
+    g.restore();
+  };
+  if (app.ring) ring(false);
+  const sph = g.createRadialGradient(cx - r * 0.4, cy - r * 0.45, r * 0.08, cx, cy, r);
+  sph.addColorStop(0, app.c[0]); sph.addColorStop(0.45, app.c[1]); sph.addColorStop(1, app.c[2]);
+  g.fillStyle = sph; g.beginPath(); g.arc(cx, cy, r, 0, 2 * Math.PI); g.fill();
+  if (app.ring) ring(true);
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.font = `700 ${on ? 76 : 68}px ${FONT}`; g.fillStyle = on ? "#ffffff" : "#c9d2e3";
+  g.fillText(app.name, cx, 560);
+  if (!["browser", "tor"].includes(app.id)) { g.font = `500 34px ${FONT}`; g.fillStyle = "#7d889e"; g.fillText("coming soon", cx, 618); }
+  uploadTex(U.T, U.c, 512, 640);
+}
+const PLANET_COLS = 3;                           // two rows of three: all in view at once
+function planetQuad(i) {
+  const col = i % PLANET_COLS, row = Math.floor(i / PLANET_COLS), s = launcher.hi === i ? 1.18 : 1;
+  return quadAt(launcher.yaw + ((PLANET_COLS - 1) / 2 - col) * 20 * deg, (row ? -17 : 8) * deg, 2.6, 0.62 * s, 0.775 * s);
+}
+function launcherToggle(on) {
+  if (on === launcher.open) return;
+  launcher.open = on;
+  if (on) {
+    launcher.yaw = headYawOf(currentRotation());
+    launcher.hi = -1; launcher.hiSrc = "";
+    if (kb.open) kbClose();
+    hudShow({title: "Home", text: "Look at a planet and press A.  B = close"}, 2500);
+  }
+}
+function launcherGaze(o, dir) {                  // the planet you look at (the d-pad choice stays for 4 s)
+  let hit = -1, hp = null;
+  for (let i = 0; i < APPS.length; i++) {
+    const h = hitQuad(planetQuad(i), o, dir);
+    if (h && h.v < 0.8) { hit = i; hp = h; break; }
+  }
+  if (hit >= 0) { launcher.hi = hit; launcher.hiSrc = "gaze"; }
+  else if (launcher.hiSrc === "gaze") launcher.hi = -1;
+  return hp;
+}
+function launcherButton(b) {
+  const n = APPS.length;
+  if (b >= 11 && b <= 14) {                     // d-pad: left / right in the row, up / down between the rows
+    if (launcher.hi < 0) launcher.hi = 0;
+    else if (b === 13 || b === 14) launcher.hi = (launcher.hi + (b === 14 ? 1 : -1) + n) % n;
+    else launcher.hi = (launcher.hi + PLANET_COLS) % n;
+    launcher.hiSrc = "pad";
+  } else if (b === 0) {
+    if (launcher.hi >= 0) launchApp(APPS[launcher.hi]); else hint("Look at a planet first", 1500);
+  } else if (b === 1) launcherToggle(false);
+}
+function launchApp(app) {
+  launcherToggle(false);
+  if (app.id === "browser") { if (state.mode !== "browser") exitVr(); return; }
+  if (app.id === "tor") { if (state.mode !== "browser") exitVr(); newTorWindow(); return; }
+  hudShow({title: app.name, text: "Coming soon"}, 2500);
+}
+
+// ── Lens settings card (View button): drawn in 3D, so each eye sees it; it follows the head, so it stays in
+// view while the field of view changes. The yellow crosses (one per lens centre) stay on the screen itself.
+const lensUi = uiCanvas(1024, 512);
+function lensCardOpen() { return !lensPanel.hidden && state.stereo; }
+function lensDraw() {
+  const U = lensUi, g = U.g, key = lens.offset + "|" + lens.fov;
+  if (key === U.key) return;
+  U.key = key;
+  g.fillStyle = "#0b0e16"; g.fillRect(0, 0, 1024, 512);
+  g.strokeStyle = "#ffd23a"; g.lineWidth = 6; g.strokeRect(3, 3, 1018, 506);
+  g.textBaseline = "middle"; g.textAlign = "left";
+  g.fillStyle = "#f2f5fa"; g.font = `700 52px ${FONT}`; g.fillText("Lens settings", 40, 60);
+  const row = (y, label, value, f, keys) => {
+    g.fillStyle = "#dfe6f2"; g.font = `600 40px ${FONT}`; g.fillText(label, 40, y);
+    g.textAlign = "right"; g.fillStyle = "#ffd23a"; g.fillText(value, 984, y); g.textAlign = "left";
+    g.fillStyle = "#222b3f"; rr(g, 40, y + 34, 760, 24, 12); g.fill();
+    g.fillStyle = "#2f81f7"; rr(g, 40, y + 34, Math.max(24, 760 * f), 24, 12); g.fill();
+    g.fillStyle = "#9aa6bd"; g.font = `600 36px ${FONT}`; g.fillText(keys, 830, y + 46);
+  };
+  row(150, "Eye separation", lens.offset.toFixed(3), (lens.offset + 0.15) / 0.4, "◀ ▶");
+  row(275, "Field of view", lens.fov + "°", (lens.fov - 50) / 60, "▲ ▼");
+  g.fillStyle = "#9aa6bd"; g.font = `500 32px ${FONT}`;
+  g.fillText("Turn until the two yellow crosses become one.", 40, 400);
+  g.fillText("Y = reset     A / B / View = done", 40, 455);
+  uploadTex(U.T, U.c, 1024, 512);
+}
+function lensQuad() {                            // head-locked, a little below the centre (the crosses stay free)
+  const R = currentRotation();
+  return {M: R, c: mv3(R, [0, -0.36, -1.6]), w: 0.96, h: 0.48};
+}
 function drawUiQuad(T, Q, alpha) {
   bindTex(T);
   gl.uniform1i(U.uMode, 0); gl.uniform1i(U.uProj, 0); gl.uniform1i(U.uGeo, 0);
@@ -2855,6 +3040,8 @@ function drawEye(R, eye, eyeOffset, x, y, w, h, fovy, shiftX, now) {
   }
   // keyboard (on top of everything but the ring)
   if (kb.open) drawUiQuad(kbUi.T, kbQuad(), 1);
+  if (launcher.a > 0) for (let i = 0; i < APPS.length; i++) drawUiQuad(launcher.ui[i].T, planetQuad(i), launcher.a);
+  if (lensCardOpen()) drawUiQuad(lensUi.T, lensQuad(), 1);
   // pointer ring
   if (state.ptrHit && (state.ptrTarget !== "page" || state.panelA > 0.5)) {
     const flash = clamp(1 - (now - clickFlash) / 250, 0, 1);
@@ -2886,13 +3073,15 @@ function frame(t) {
   // fades: panel out / video in once the first video frame is up; panel -> cinema in "screen" mode
   const showVideo = state.mode === "vr" && (videoHasFrame || !!demoVideoSrc);
   state.videoA = approach(state.videoA, showVideo ? 1 : 0, dt, 0.25);
-  state.panelA = approach(state.panelA, showVideo ? 0 : 1, dt, 0.2);
+  state.panelA = approach(state.panelA, showVideo || launcher.open ? 0 : 1, dt, 0.2);   // home: the browser fades away
   state.cinemaT = approach(state.cinemaT, state.mode === "screen" ? 1 : 0, dt, 0.3);
   if (state.panelA > 0.995) state.panelA = 1; if (state.panelA < 0.003) state.panelA = 0;
   if (state.videoA > 0.995) state.videoA = 1; if (state.videoA < 0.003) state.videoA = 0;
   if (Math.abs(state.cinemaT - (state.mode === "screen" ? 1 : 0)) < 0.002) state.cinemaT = state.mode === "screen" ? 1 : 0;
   hud3.a = approach(hud3.a, now < hud3.until ? 1 : 0, dt, 0.15);
   bar.a = approach(bar.a, barVisible() ? 1 : 0, dt, 0.05);
+  launcher.a = approach(launcher.a, launcher.open ? 1 : 0, dt, 0.08);
+  if (launcher.a < 0.003) launcher.a = 0;
   if (bar.a < 0.003) bar.a = 0;
   if (!state.frameSeen && !DEMO) {
     if (!location.host) drawPlaceholder("VR Browser", "Opened without the laptop server");
@@ -2902,6 +3091,8 @@ function frame(t) {
   resize();
   badgeWatch(now);
   if (chromeVisible()) chromeDraw(now);
+  if (lensCardOpen()) lensDraw();
+  if (launcher.a > 0) for (let i = 0; i < APPS.length; i++) planetDraw(i);
   if (state.mode === "vr" && bar.a > 0.002) barDraw(now);
   if (kb.open) kbDraw(now);
   const W = canvas.width, Hh = canvas.height;
