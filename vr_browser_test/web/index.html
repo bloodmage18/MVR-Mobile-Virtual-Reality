@@ -72,6 +72,7 @@
   <button id="btnMode" type="button">Mono</button>
   <button id="btnLens" type="button">Lens</button>
 </div>
+<input id="phonePick" type="file" accept="image/*,video/*" multiple hidden>
 <div id="lensPanel" hidden>
   <label>Eye separation (lens offset): <span id="offVal"></span>
     <input id="offRange" type="range" min="-0.15" max="0.25" step="0.005"></label>
@@ -821,6 +822,7 @@ function send(obj) {
 }
 function withKey(url) {
   if (!url) return "";
+  if (url.startsWith("blob:")) return url;       // G2: a file from this phone
   if (!KEY || /[?&]k=/.test(url)) return url;
   return url + (url.includes("?") ? "&" : "?") + "k=" + encodeURIComponent(KEY);
 }
@@ -2698,6 +2700,10 @@ function onButtonHeld(b, held, now) {
     return;
   }
   if (held < 400) return;
+  if (gal.open && !launcher.open && b >= 11 && b <= 14) {      // held d-pad keeps moving through the gallery
+    if (now - holdRepeat[b] >= 120) { holdRepeat[b] = now; galButton(b); }
+    return;
+  }
   if (kb.open && lensPanel.hidden && (b === 2 || (b >= 11 && b <= 14))) {
     if (now - holdRepeat[b] >= 80) { holdRepeat[b] = now; if (b === 2) kbBackspace(); else kbMove(b); }
     return;
@@ -2743,6 +2749,12 @@ function pollPads(dt) {
     return;
   }
   stick.dir = 0;
+  if (gal.open && !launcher.open) {              // the gallery: left stick scrolls it (down = further down)
+    if (p.ly) galScrollTo(gal.scrollT + p.ly * Math.abs(p.ly) * 7 * dt);
+    state.curYaw = clamp(state.curYaw + p.rx * 1.1 * dt, -0.6, 0.6);      // right stick still nudges the pointer
+    state.curPitch = clamp(state.curPitch - p.ry * 1.1 * dt, -0.5, 0.5);
+    return;
+  }
   if (scrAdj && !fullScreenView()) scrAdjToggle(false);
   if (scrAdj) {                                              // R3 screen adjust: up = farther, right = bigger
     if (p.ly || p.lx) {
@@ -2787,6 +2799,7 @@ function endPointer(cancel) {
   if (pointersDown === 0) multiTouch = false;
   if (cancel || wasDrag || multi) { lastTap = 0; return; }
   if (needTap) { playVideo(); hudHide(); lastTap = 0; return; }   // must run inside the gesture (iOS)
+  if (gal.pickArmed) { gal.pickArmed = false; hudHide(); lastTap = 0; phonePick.click(); return; }   // G2
   const now = performance.now();
   if (now - lastTap > 40 && now - lastTap < 320) { clearTimeout(tapTimer); recenter(); lastTap = 0; return; }
   lastTap = now;
@@ -3010,18 +3023,21 @@ function launchApp(app) {
 
 // ── Gallery (Home: Gallery planet): the laptop's picture / video folders as a grid of thumbnails in front of
 // you. Pictures open on the big screen (◀ ▶ = previous / next), videos play in the video player.
-const GAL_COLS = 4, GAL_ROWS = 3, GAL_N = GAL_COLS * GAL_ROWS, GAL_HEAD = 150;
+const GAL_COLS = 4, GAL_ROWS = 3, GAL_HEAD = 150, GAL_TH = (1280 - GAL_HEAD) / GAL_ROWS;
 const gal = {open: false, a: 0, yaw: 0, r: -1, p: "", title: "Gallery", items: [], page: 0, hi: -1, hiSrc: "",
-             ui: null, thumbs: new Map(), stack: [], viewing: null, vw: 16, vh: 9, resume: false, busy: false, err: ""};
+             ui: null, thumbs: new Map(), stack: [], viewing: null, vw: 16, vh: 9, resume: false, busy: false, err: "",
+             phone: [], pickArmed: false, thumbQ: [], thumbBusy: false, blobUrl: "", scroll: 0, scrollT: 0};
 const galUrl = (what, it) => `/gallery/${what}?k=${encodeURIComponent(KEY)}&r=${it.r}&p=${encodeURIComponent(it.p)}`;
 function galLoad(r, p, keepPage) {
+  if (r === "phone") { galPhoneList(keepPage); return; }
   gal.busy = true; gal.err = "";
   if (gal.ui) gal.ui.key = "";
   fetch(`/gallery/list?k=${encodeURIComponent(KEY)}&r=${r}&p=${encodeURIComponent(p || "")}`)
     .then((res) => res.json())
     .then((d) => {
       gal.r = r; gal.p = p || ""; gal.title = d.title || "Gallery"; gal.items = d.items || []; gal.err = d.error || "";
-      if (!keepPage) { gal.page = 0; gal.hi = gal.items.length ? 0 : -1; gal.hiSrc = "pad"; }
+      if (r === -1) gal.items.push({n: "This phone", t: "phone", r: "phone", p: ""});   // G2: photos on the phone
+      if (!keepPage) { gal.scroll = gal.scrollT = 0; gal.hi = gal.items.length ? 0 : -1; gal.hiSrc = "pad"; }
     })
     .catch(() => { gal.err = "The laptop did not answer"; })
     .then(() => { gal.busy = false; if (gal.ui) gal.ui.key = ""; });
@@ -3034,11 +3050,25 @@ function galShow() {
   if (!gal.items.length && !gal.busy) galLoad(-1, "");
   if (gal.ui) gal.ui.key = "";
 }
-function galHide() { gal.open = false; }
-function galPages() { return Math.max(1, Math.ceil(gal.items.length / GAL_N)); }
+function galHide() { gal.open = false; if (gal.pickArmed) { gal.pickArmed = false; hudHide(); } }
+// one long list that scrolls (left stick; the d-pad highlight pulls it along; LB / RB = a screenful)
+function galMaxScroll() { return Math.max(0, Math.ceil(gal.items.length / GAL_COLS) - GAL_ROWS); }
+function galScrollTo(t) { gal.scrollT = clamp(t, 0, galMaxScroll()); }
+function galKeepVisible(i) {
+  const row = Math.floor(i / GAL_COLS);
+  if (row < gal.scrollT) galScrollTo(row);
+  else if (row > gal.scrollT + GAL_ROWS - 1) galScrollTo(row - GAL_ROWS + 1);
+}
 function galThumb(it) {                          // load once, redraw the grid when it arrives
   const k = it.r + "|" + it.p;
   let t = gal.thumbs.get(k);
+  if (!t && it.r === "phone") {
+    t = {img: null, ok: false};
+    gal.thumbs.set(k, t);
+    gal.thumbQ.push({it, t});
+    phoneThumbNext();
+    return null;
+  }
   if (!t) {
     t = {img: new Image(), ok: false};
     t.img.onload = () => { t.ok = true; if (gal.ui) gal.ui.key = ""; };
@@ -3049,40 +3079,50 @@ function galThumb(it) {                          // load once, redraw the grid w
   return t.ok ? t.img : null;
 }
 function galDraw() {
-  const U = gal.ui || (gal.ui = uiCanvas(2048, 1280)), g = U.g;
-  const start = gal.page * GAL_N, shown = gal.items.slice(start, start + GAL_N);
+  // drawn at 1280 x 800 (the grid covers ~600 px of an eye; 2048 x 1280 uploads stalled the A08): the code
+  // below still works in 2048 x 1280 units, scaled down
+  const U = gal.ui || (gal.ui = uiCanvas(1280, 800)), g = U.g;
+  const r0 = Math.floor(gal.scroll), start = r0 * GAL_COLS, shown = gal.items.slice(start, start + (GAL_ROWS + 1) * GAL_COLS);
   const thumbs = shown.map((it) => (it.t === "img" || it.t === "vid") ? galThumb(it) : null);
-  const key = [gal.title, gal.page, gal.hi, gal.busy, gal.err, gal.items.length, thumbs.map((t) => t ? 1 : 0).join("")].join("|");
+  const key = [gal.title, Math.round(gal.scroll * 200), gal.hi, gal.busy, gal.err, gal.items.length,
+               thumbs.map((t) => t ? 1 : 0).join("")].join("|");
   if (key === U.key) return;
-  U.key = key;
+  const now = performance.now();                  // while it scrolls: at most ~20 redraws a second
+  if (U.key && key.split("|").slice(2).join("|") === U.key.split("|").slice(2).join("|") && now - (U.at || 0) < 50) return;
+  U.key = key; U.at = now;
+  g.setTransform(1280 / 2048, 0, 0, 1280 / 2048, 0, 0);
   g.fillStyle = "#0b0e16"; g.fillRect(0, 0, 2048, 1280);
   g.strokeStyle = "#2b3b5c"; g.lineWidth = 6; g.strokeRect(3, 3, 2042, 1274);
   g.textBaseline = "middle"; g.textAlign = "left";
   g.fillStyle = "#f2f5fa"; g.font = `700 64px ${FONT}`;
   g.fillText(fitText(g, gal.title, 1300), 48, 78);
   g.textAlign = "right"; g.fillStyle = "#9aa6bd"; g.font = `500 40px ${FONT}`;
-  g.fillText(gal.busy ? "Loading…" : `${gal.page + 1} / ${galPages()}   LB / RB = page   B = back`, 2000, 78);
+  const n = gal.items.length;
+  g.fillText(gal.busy ? "Loading…" : `${n} item${n === 1 ? "" : "s"}${galMaxScroll() ? "   stick = scroll" : ""}   B = back`, 2000, 78);
   if (gal.err || (!gal.busy && !gal.items.length)) {
     g.textAlign = "center"; g.fillStyle = "#9aa6bd"; g.font = `500 52px ${FONT}`;
     g.fillText(gal.err || "No pictures or videos here", 1024, 700);
   }
-  const tw = 2048 / GAL_COLS, th = (1280 - GAL_HEAD) / GAL_ROWS;
+  const tw = (2048 - 44) / GAL_COLS, th = GAL_TH;
+  g.save(); g.beginPath(); g.rect(0, GAL_HEAD, 2048, 1280 - GAL_HEAD - 6); g.clip();   // rows scroll under the header
   shown.forEach((it, i) => {
-    const x = (i % GAL_COLS) * tw, y = GAL_HEAD + Math.floor(i / GAL_COLS) * th, on = start + i === gal.hi;
+    const x = (i % GAL_COLS) * tw, y = GAL_HEAD + (r0 + Math.floor(i / GAL_COLS) - gal.scroll) * th, on = start + i === gal.hi;
     const ix = x + 22, iy = y + 14, iw = tw - 44, ih = th - 92;
     g.fillStyle = on ? "#1d2a44" : "#121826"; rr(g, x + 10, y + 4, tw - 20, th - 12, 22); g.fill();
     if (on) { g.strokeStyle = "#2f81f7"; g.lineWidth = 8; g.stroke(); }
     const img = thumbs[i];
     if (img) {                                   // cover-fit the preview into the tile
-      const s = Math.max(iw / img.naturalWidth, ih / img.naturalHeight), sw = iw / s, sh = ih / s;
+      const nw = img.naturalWidth || img.width, nh = img.naturalHeight || img.height;
+      const s = Math.max(iw / nw, ih / nh), sw = iw / s, sh = ih / s;
       g.save(); rr(g, ix, iy, iw, ih, 14); g.clip();
-      g.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, ix, iy, iw, ih);
+      g.drawImage(img, (nw - sw) / 2, (nh - sh) / 2, sw, sh, ix, iy, iw, ih);
       g.restore();
     } else {
       g.fillStyle = "#1a2233"; rr(g, ix, iy, iw, ih, 14); g.fill();
-      g.textAlign = "center"; g.fillStyle = it.t === "dir" || it.t === "root" ? "#ffd23a" : "#55607a";
-      g.font = `600 ${it.t === "dir" || it.t === "root" ? 150 : 70}px ${FONT}`;
-      g.fillText(it.t === "dir" || it.t === "root" ? "▰" : "…", ix + iw / 2, iy + ih / 2);
+      const folder = it.t === "dir" || it.t === "root" || it.t === "phone";
+      g.textAlign = "center"; g.fillStyle = folder ? "#ffd23a" : it.t === "pick" ? "#2f81f7" : "#55607a";
+      g.font = `600 ${folder || it.t === "pick" ? 150 : 70}px ${FONT}`;
+      g.fillText(it.t === "phone" ? "▯" : it.t === "pick" ? "+" : folder ? "▰" : "…", ix + iw / 2, iy + ih / 2);
     }
     if (it.t === "vid") {                        // play badge
       g.fillStyle = "rgba(0,0,0,.55)"; g.beginPath(); g.arc(ix + iw / 2, iy + ih / 2, 54, 0, 2 * Math.PI); g.fill();
@@ -3092,7 +3132,16 @@ function galDraw() {
     g.textAlign = "center"; g.fillStyle = on ? "#ffffff" : "#c9d2e3"; g.font = `${on ? 700 : 500} 40px ${FONT}`;
     g.fillText(fitText(g, it.n, tw - 50), x + tw / 2, y + th - 46);
   });
-  uploadTex(U.T, U.c, 2048, 1280);
+  g.restore();
+  const max = galMaxScroll();
+  if (max > 0) {                                 // scrollbar on the right
+    const ty = GAL_HEAD + 12, tH = 1280 - GAL_HEAD - 30, rows = max + GAL_ROWS;
+    const hH = Math.max(60, tH * GAL_ROWS / rows), hy = ty + (tH - hH) * (gal.scroll / max);
+    g.fillStyle = "#1a2233"; rr(g, 2048 - 32, ty, 16, tH, 8); g.fill();
+    g.fillStyle = "#5d7bb0"; rr(g, 2048 - 32, hy, 16, hH, 8); g.fill();
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  uploadTex(U.T, U.c, 1280, 800);
 }
 function galQuad() { return quadAt(gal.yaw, -6 * deg, 2.1, 2.4, 1.5); }
 function galGaze(o, dir) {
@@ -3100,34 +3149,42 @@ function galGaze(o, dir) {
   if (!h) { if (gal.hiSrc === "gaze") gal.hi = -1; return null; }
   const py = h.v * 1280;
   if (py > GAL_HEAD) {
-    const i = gal.page * GAL_N + Math.min(GAL_ROWS - 1, Math.floor((py - GAL_HEAD) / ((1280 - GAL_HEAD) / GAL_ROWS))) * GAL_COLS
-              + Math.min(GAL_COLS - 1, Math.floor(h.u * GAL_COLS));
-    if (i < gal.items.length) { gal.hi = i; gal.hiSrc = "gaze"; }
+    const px = h.u * 2048;
+    const i = Math.floor((py - GAL_HEAD) / GAL_TH + gal.scroll) * GAL_COLS
+              + Math.min(GAL_COLS - 1, Math.floor(px / ((2048 - 44) / GAL_COLS)));
+    if (px < 2048 - 44 && i >= 0 && i < gal.items.length) { gal.hi = i; gal.hiSrc = "gaze"; }
   }
   return h;
 }
 function galButton(b) {
   const n = gal.items.length;
-  if (b >= 11 && b <= 14) {                      // d-pad: move in the grid (pages turn at the edges)
+  if (b >= 11 && b <= 14) {                      // d-pad: move in the grid; the list scrolls along
     if (!n) return;
-    let i = gal.hi < 0 ? gal.page * GAL_N : gal.hi;
+    let i = gal.hi < 0 ? Math.round(gal.scrollT) * GAL_COLS : gal.hi;
     i += b === 13 ? -1 : b === 14 ? 1 : b === 11 ? -GAL_COLS : GAL_COLS;
-    gal.hi = clamp(i, 0, n - 1); gal.hiSrc = "pad"; gal.page = Math.floor(gal.hi / GAL_N);
-  } else if (b === 9 || b === 10) {              // LB / RB: page
-    gal.page = clamp(gal.page + (b === 10 ? 1 : -1), 0, galPages() - 1);
-    gal.hi = Math.min(n - 1, gal.page * GAL_N); gal.hiSrc = "pad";
+    gal.hi = clamp(i, 0, n - 1); gal.hiSrc = "pad"; galKeepVisible(gal.hi);
+  } else if (b === 9 || b === 10) {              // LB / RB: a screenful up / down
+    galScrollTo(Math.round(gal.scrollT) + (b === 10 ? GAL_ROWS : -GAL_ROWS));
+    gal.hi = Math.min(n - 1, Math.round(gal.scrollT) * GAL_COLS); gal.hiSrc = "pad";
   } else if (b === 0) {
     const it = gal.items[gal.hi];
     if (it) galOpenItem(it);
   } else if (b === 1) {                          // back: up one folder; from the folder list: close
-    if (gal.stack.length) { const s = gal.stack.pop(); galLoad(s.r, s.p, true); gal.page = s.page; gal.hi = s.hi; }
+    if (gal.stack.length) { const s = gal.stack.pop(); galLoad(s.r, s.p, true); gal.scroll = gal.scrollT = s.scroll; gal.hi = s.hi; }
     else if (gal.r !== -1) galLoad(-1, "");
     else galHide();
   }
 }
 function galOpenItem(it) {
+  if (it.t === "pick") { phonePickArm(); return; }
+  if (it.t === "phone") {
+    gal.stack.push({r: gal.r, p: gal.p, scroll: gal.scrollT, hi: gal.hi});
+    if (gal.phone.length) galPhoneList(); else { galPhoneList(); phonePickArm(); }
+    return;
+  }
+  if (it.r === "phone" && it.t === "vid") { phonePlay(it); return; }
   if (it.t === "dir" || it.t === "root") {
-    gal.stack.push({r: gal.r, p: gal.p, page: gal.page, hi: gal.hi});
+    gal.stack.push({r: gal.r, p: gal.p, scroll: gal.scrollT, hi: gal.hi});
     galLoad(it.r, it.p);
   } else if (it.t === "img") galView(gal.items.indexOf(it));
   else if (it.t === "vid") {
@@ -3144,8 +3201,17 @@ function galView(i) {
   galHide();
   setMode("screen");
   hudShow({title: it.n, text: "◀ ▶ = previous / next   R3 = move / resize   B = back"}, 2500);
-  fetch(galUrl("img", it)).then((r) => r.ok ? r.blob() : Promise.reject(r.status))
+  (it.r === "phone" ? Promise.resolve(gal.phone[+it.p]) : fetch(galUrl("img", it)).then((r) => r.ok ? r.blob() : Promise.reject(r.status)))
     .then((b) => createImageBitmap(b))
+    .then((bmp) => {                             // phone photos can be huge: at most 4096 px for the texture
+      const m = Math.max(bmp.width, bmp.height);
+      if (m <= 4096) return bmp;
+      const k = 4096 / m, c = document.createElement("canvas");
+      c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+      bmp.close && bmp.close();
+      return c;
+    })
     .then((bmp) => {
       if (!gal.viewing || gal.viewing.i !== i) { bmp.close && bmp.close(); return; }
       uploadTex(panelTex, bmp, bmp.width, bmp.height); gal.vw = bmp.width; gal.vh = bmp.height;
@@ -3158,6 +3224,73 @@ function galViewStep(d) {
   for (let i = gal.viewing.i + d; i >= 0 && i < gal.items.length; i += d)
     if (gal.items[i].t === "img") { galView(i); return; }
   hint(d > 0 ? "Last picture" : "First picture", 1200);
+}
+// ── G2: photos and videos from this phone. The phone's own picker opens on a touch tap (browsers only open
+// it from a real touch, not a controller button); the files never leave the phone.
+const phonePick = document.getElementById("phonePick");
+function phonePickArm() {
+  gal.pickArmed = true;
+  hudShow({title: "Choose from this phone", text: "Take the phone out and tap the screen: your photos open. Pick, then put it back."}, Infinity);
+}
+function galPhoneList(keepPage) {
+  gal.r = "phone"; gal.p = ""; gal.title = "This phone"; gal.err = ""; gal.busy = false;
+  gal.items = [{n: "Choose…", t: "pick", r: "phone", p: "pick"},
+               ...gal.phone.map((f, i) => ({n: f.name, t: /^video\//.test(f.type) ? "vid" : "img", r: "phone", p: String(i)}))];
+  if (!keepPage) { gal.scroll = gal.scrollT = 0; gal.hi = gal.items.length > 1 ? 1 : 0; gal.hiSrc = "pad"; }
+  if (gal.ui) gal.ui.key = "";
+}
+phonePick.addEventListener("change", () => {
+  const seen = new Set(gal.phone.map((f) => f.name + "|" + f.size));
+  for (const f of phonePick.files || []) {
+    if (!/^(image|video)\//.test(f.type) || seen.has(f.name + "|" + f.size)) continue;
+    seen.add(f.name + "|" + f.size); gal.phone.push(f);
+  }
+  phonePick.value = "";
+  gal.pickArmed = false;
+  hudHide();
+  if (!gal.open) galShow();
+  galPhoneList();
+});
+function phoneThumbNext() {                      // one at a time: phone photos are big
+  if (gal.thumbBusy || !gal.thumbQ.length) return;
+  const {it, t} = gal.thumbQ.shift(), f = gal.phone[+it.p];
+  if (!f) { phoneThumbNext(); return; }
+  gal.thumbBusy = true;
+  const done = (src) => {
+    if (src) {
+      const k = Math.min(1, 384 / Math.max(src.width || src.videoWidth, src.height || src.videoHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round((src.width || src.videoWidth) * k));
+      c.height = Math.max(1, Math.round((src.height || src.videoHeight) * k));
+      try { c.getContext("2d").drawImage(src, 0, 0, c.width, c.height); t.img = c; t.ok = true; } catch (_) {}
+      if (src.close) src.close();
+      if (gal.ui) gal.ui.key = "";
+    }
+    gal.thumbBusy = false;
+    phoneThumbNext();
+  };
+  if (it.t === "img") { createImageBitmap(f).then(done, () => done(null)); return; }
+  const v = document.createElement("video"), url = URL.createObjectURL(f);   // a frame 1 s in
+  v.muted = true; v.playsInline = true; v.preload = "auto";
+  let fin = false;
+  const end = (ok) => { if (fin) return; fin = true; done(ok ? v : null); URL.revokeObjectURL(url); v.removeAttribute("src"); };
+  v.addEventListener("loadeddata", () => { try { v.currentTime = Math.min(1, (v.duration || 2) / 2); } catch (_) { end(true); } });
+  v.addEventListener("seeked", () => end(true));
+  v.addEventListener("error", () => end(false));
+  setTimeout(() => end(false), 8000);
+  v.src = url;
+}
+function phonePlay(it) {                         // a video from this phone in the normal video player
+  const f = gal.phone[+it.p];
+  if (!f) return;
+  if (gal.blobUrl) URL.revokeObjectURL(gal.blobUrl);
+  gal.blobUrl = URL.createObjectURL(f);
+  const n = f.name.toLowerCase();
+  const proj = /360/.test(n) ? "equirect" : /180/.test(n) ? "half_sbs" : /\bsbs\b|3d/.test(n) ? "flat_sbs" : "flat";
+  gal.resume = true; galHide();
+  startVideo({t: "video", state: "ready", mode: "file", src: gal.blobUrl, title: f.name.replace(/\.[^.]+$/, ""),
+              start: 0, w: 0, h: 0, projection: PROJ[proj] ? proj : "flat", stereo: proj === "flat_sbs" || proj === "half_sbs" ? "sbs" : "mono",
+              projection_source: proj === "flat" ? "guess" : "title", image_test: proj === "flat", vid: null});
 }
 function galViewClose() {
   gal.viewing = null;
@@ -3332,6 +3465,7 @@ function frame(t) {
   bar.a = approach(bar.a, barVisible() ? 1 : 0, dt, 0.05);
   launcher.a = approach(launcher.a, launcher.open ? 1 : 0, dt, 0.08);
   gal.a = approach(gal.a, gal.open ? 1 : 0, dt, 0.08);
+  gal.scroll = Math.abs(gal.scrollT - gal.scroll) < 0.002 ? gal.scrollT : approach(gal.scroll, gal.scrollT, dt, 0.06);
   if (gal.a < 0.003) gal.a = 0;
   if (launcher.a < 0.003) launcher.a = 0;
   if (bar.a < 0.003) bar.a = 0;
@@ -3411,6 +3545,12 @@ function isStandalone() {
 function begin(fromTap) {
   begun = true;
   audioStart();
+  // Home (the planets) is the first screen (B = the browser; ?start=browser keeps the old way).
+  // A moment later, so the head direction is known and the planets appear in front of you.
+  if (PARAMS.get("start") !== "browser" && !launcher.shownAtStart) {
+    launcher.shownAtStart = true;                // once (begin() can run again)
+    setTimeout(() => { if (!gal.open && state.mode === "browser" && !launcher.open) launcherToggle(true); }, 1200);
+  }
   startEl.hidden = true;
   document.getElementById("buttons").hidden = false;
   setStereo(state.stereo);

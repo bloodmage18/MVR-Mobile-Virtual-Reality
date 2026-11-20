@@ -87,6 +87,7 @@ Brave's own **"New private window with Tor"** (the same as Alt+Shift+N in Brave)
 
 ## Home (planets)
 
+The planets are the first thing you see after the start tap (`?start=browser` in the address skips that).
 Hold **Start** for about a second: the browser fades away and you float in space with your apps as planets
 in front of you (two rows of three). Look at one (or move with the d-pad) and press **A**; **B** or holding
 Start again closes it.
@@ -102,9 +103,14 @@ Start again closes it.
 - **Gallery**: the laptop's Pictures and Videos folders as a grid of thumbnails. Look at one (or d-pad), A opens
   it: a folder opens, a picture fills the big screen (◀ ▶ / LB RB = previous / next, R3 = move / resize,
   B = back to the grid), a video plays in the video player (360 / 3D detected like other videos, Y fixes it;
-  B = back to the gallery). LB / RB turn pages, B goes up a folder (from the folder list: closes the gallery).
+  B = back to the gallery). The left stick scrolls the list (the d-pad highlight
+  pulls it along, LB / RB jump a screenful), B goes up a folder (from the folder list: closes the gallery).
   Other folders: create `vr_browser_test\gallery.json` with `{"folders": ["D:/Photos", "E:/Videos"]}`.
   Previews are kept in `cache\thumbs`.
+  **This phone** (last tile of the folder list): photos and videos from the phone itself. The first time (and
+  with **Choose…**) take the phone out and **tap the screen**: the phone's own photo picker opens (browsers only
+  open it from a real touch). Pick, put the phone back. The files never leave the phone; the list is forgotten
+  when the page reloads.
 - **Theater, Games**: coming soon.
 
 The phone draws the planets itself, so they cost the laptop nothing.
