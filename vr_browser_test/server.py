@@ -959,6 +959,138 @@ def repair_laptop_mute() -> None:
     AUDIO_FLAG.unlink(missing_ok=True)
 
 
+# ================================================================ B3: the laptop's desktop (Home: Desktop planet)
+DESK_FPS = 30
+DESK_BITRATE = "8M"
+
+
+class Desktop:
+    """The laptop's real mouse and keyboard, driven from the phone while the desktop is on the big screen.
+    Positions come as 0..1 of the primary monitor (the one that is captured)."""
+
+    def __init__(self) -> None:
+        import ctypes
+        import ctypes.wintypes as wt
+        self.ct, self.u = ctypes, ctypes.windll.user32
+
+        class KEYBDINPUT(ctypes.Structure):
+            _fields_ = [("wVk", wt.WORD), ("wScan", wt.WORD), ("dwFlags", wt.DWORD), ("time", wt.DWORD),
+                        ("dwExtraInfo", ctypes.c_size_t)]
+
+        class MOUSEINPUT(ctypes.Structure):
+            _fields_ = [("dx", wt.LONG), ("dy", wt.LONG), ("mouseData", wt.DWORD), ("dwFlags", wt.DWORD),
+                        ("time", wt.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
+
+        class _U(ctypes.Union):
+            _fields_ = [("ki", KEYBDINPUT), ("mi", MOUSEINPUT)]
+
+        class INPUT(ctypes.Structure):
+            _fields_ = [("type", wt.DWORD), ("u", _U)]
+        self.KEYBDINPUT, self.MOUSEINPUT, self.INPUT = KEYBDINPUT, MOUSEINPUT, INPUT
+
+    def _send(self, *inputs) -> None:
+        arr = (self.INPUT * len(inputs))(*inputs)
+        self.u.SendInput(len(inputs), arr, self.ct.sizeof(self.INPUT))
+
+    def _mouse(self, flags: int, data: int = 0):
+        i = self.INPUT(type=0)
+        i.u.mi = self.MOUSEINPUT(0, 0, data & 0xFFFFFFFF, flags, 0, 0)
+        return i
+
+    def _key(self, vk: int, scan: int, flags: int):
+        i = self.INPUT(type=1)
+        i.u.ki = self.KEYBDINPUT(vk, scan, flags, 0, 0)
+        return i
+
+    def move(self, x: float, y: float) -> None:
+        w, h = self.u.GetSystemMetrics(0), self.u.GetSystemMetrics(1)
+        self.u.SetCursorPos(int(min(max(x, 0.0), 1.0) * (w - 1)), int(min(max(y, 0.0), 1.0) * (h - 1)))
+
+    def click(self, x: float, y: float, right: bool = False) -> None:
+        self.move(x, y)
+        self._send(self._mouse(0x0008 if right else 0x0002), self._mouse(0x0010 if right else 0x0004))
+
+    def wheel(self, x: float, y: float, dy: float) -> None:
+        self.move(x, y)
+        self._send(self._mouse(0x0800, int(-dy / 100 * 120)))      # page-style dy (px) -> wheel notches
+
+    _EXT = {33, 34, 35, 36, 37, 38, 39, 40, 45, 46}                # PgUp..arrows, Ins, Del: extended keys
+
+    def key(self, name: str) -> None:
+        k = _KEYS.get(name)
+        if not k:
+            return
+        vk = k[1]
+        ext = 1 if vk in self._EXT else 0
+        self._send(self._key(vk, 0, ext), self._key(vk, 0, ext | 2))
+
+    def text(self, s: str) -> None:
+        ev = []
+        for ch in s:
+            if ch in "\r\n":
+                self.key("Enter")
+                continue
+            b = ch.encode("utf-16-le")
+            for unit in (int.from_bytes(b[i:i + 2], "little") for i in range(0, len(b), 2)):
+                ev += [self._key(0, unit, 0x0004), self._key(0, unit, 0x0004 | 0x0002)]   # KEYEVENTF_UNICODE
+        if ev:
+            self._send(*ev)
+
+
+def desktop_ffmpeg_cmd(ffmpeg: str, encoder: str) -> list[str]:
+    """Windows Graphics Capture of the primary monitor (with the mouse pointer) -> H.264 in FLV on stdout.
+    (Not Desktop Duplication: that fails with "Selected output not supported" when ffmpeg runs on the
+    NVIDIA GPU of this hybrid laptop while the screen is on the Intel one.)
+    qsv = the Intel GPU encodes (light on the CPU); x264 = CPU fallback."""
+    cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-fflags", "nobuffer", "-flags", "low_delay",
+           "-f", "lavfi", "-i", f"gfxcapture=monitor_idx=0:capture_cursor=1:max_framerate={DESK_FPS}"]
+    scale = "scale='min(1920,iw)':-2"
+    if encoder == "qsv":
+        cmd += ["-vf", f"hwdownload,format=bgra,{scale},format=nv12", "-c:v", "h264_qsv", "-preset", "veryfast",
+                "-profile:v", "main", "-bf", "0", "-g", str(DESK_FPS), "-async_depth", "1",
+                "-b:v", DESK_BITRATE, "-maxrate", DESK_BITRATE]
+    else:
+        cmd += ["-vf", f"hwdownload,format=bgra,{scale},format=yuv420p", "-c:v", "libx264", "-preset", "ultrafast",
+                "-tune", "zerolatency", "-profile:v", "main", "-bf", "0", "-g", str(DESK_FPS),
+                "-b:v", DESK_BITRATE, "-maxrate", DESK_BITRATE, "-bufsize", DESK_BITRATE]
+    return cmd + ["-an", "-f", "flv", "-flvflags", "no_duration_filesize", "-flush_packets", "1", "pipe:1"]
+
+
+def flv_h264_reader(proc: subprocess.Popen, emit) -> None:
+    """Thread: FLV tags from ffmpeg -> emit(kind, payload): 0 = avcC config, 1 = keyframe, 2 = delta,
+    None = end. (Same framing as bridge/hmd_bridge.py.)"""
+    out = proc.stdout
+
+    def rd(n: int) -> bytes:
+        buf = bytearray()
+        while len(buf) < n:
+            c = out.read(n - len(buf))
+            if not c:
+                raise EOFError
+            buf += c
+        return bytes(buf)
+    try:
+        head = rd(9)
+        if head[:3] != b"FLV":
+            raise EOFError
+        rd(max(int.from_bytes(head[5:9], "big") - 9, 0) + 4)
+        while True:
+            tag = rd(11)
+            size = int.from_bytes(tag[1:4], "big")
+            body = rd(size)
+            rd(4)
+            if tag[0] & 0x1F != 9 or size < 5 or body[0] & 0x0F != 7:
+                continue
+            if body[1] == 0:
+                emit(0, body[5:])
+            elif body[1] == 1 and len(body) > 5:
+                emit(1 if body[0] >> 4 == 1 else 2, body[5:])
+    except (EOFError, ValueError, OSError):
+        pass
+    finally:
+        emit(None, b"")
+
+
 class AudioPipe:
     """Round B1: Brave's sound (only Brave's process tree, Windows process loopback) -> every /ws/audio phone.
     Runs while at least one phone listens; the laptop speakers are muted meanwhile (restored when it stops,
@@ -991,8 +1123,31 @@ class AudioPipe:
         """Start (or restart after a Brave restart) the capture while phones listen."""
         if LAPTOP_SOUND or not self.listeners:
             return
-        pid = self._brave_pid()
+        desk = self.vb.mode == "desktop"                # the desktop: every laptop sound, not only Brave's
+        pid = -1 if desk else self._brave_pid()
         if self.proc is not None and self.proc.poll() is None and pid == self.pid:
+            return
+        if getattr(self, "switching", False):
+            return
+        if self.proc is not None and self.proc.poll() is None and pid:
+            # switching Brave <-> desktop sound: the old helper must restore the speakers BEFORE the new one
+            # checks and mutes them (otherwise the new one sees "already muted" and the laptop plays along)
+            import threading
+            old, self.proc, self.pid, self.switching = self.proc, None, 0, True
+            loop = asyncio.get_running_loop()
+
+            def wait_then() -> None:
+                with contextlib.suppress(Exception):
+                    old.stdin.close()
+                try:
+                    old.wait(3)
+                except Exception:
+                    old.kill()
+                    repair_laptop_mute()
+                self.switching = False
+                with contextlib.suppress(RuntimeError):
+                    loop.call_soon_threadsafe(self.ensure)
+            threading.Thread(target=wait_then, daemon=True).start()
             return
         self.stop()
         if not pid:
@@ -1005,7 +1160,8 @@ class AudioPipe:
         import threading
         self.loop = asyncio.get_running_loop()
         try:
-            proc = subprocess.Popen([str(self.exe), str(pid), "--mute", str(AUDIO_FLAG)], stdin=subprocess.PIPE,
+            proc = subprocess.Popen([str(self.exe), "0" if desk else str(pid), "--mute", str(AUDIO_FLAG),
+                                     *(["--all"] if desk else [])], stdin=subprocess.PIPE,
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=NO_WINDOW)
         except OSError as e:
             log(f"[sound] could not start the capture: {e!r}")
@@ -1087,6 +1243,7 @@ class VRBrowser:
         self.video_msg: dict | None = None            # last "ready"/"screen" message (for reconnects)
         self.video_session = ""
         self.fs_screen = False                        # screen mode because the site went full screen (B2)
+        self.desk: "Desktop | None" = None             # B3: the laptop's mouse / keyboard while on the desktop
         self.fs_ignore_off = 0.0                      # Tor: our own exitFullscreen (real -> page-filling) until then
         self.resolve_task: asyncio.Task | None = None
         self.resolve_key = ""                         # which video the running resolve is for
@@ -1902,7 +2059,7 @@ class VRBrowser:
     # ---------------------------------------------------------------- screencast (active window only)
     @property
     def want_cast(self) -> bool:
-        return bool(self.clients) and self.mode != "vr" and bool(self.session)
+        return bool(self.clients) and self.mode not in ("vr", "desktop") and bool(self.session)
 
     async def set_cast(self, on: bool) -> None:
         if on and not self.casting:
@@ -1996,8 +2153,45 @@ class VRBrowser:
         best = max((c for c in self.clients if c.caps and c.alive), key=lambda c: c.caps_t, default=None)
         return best.caps if best else DEFAULT_CAPS
 
+    def _desk_input(self, t: str, m: dict) -> None:
+        def f(k: str) -> float:
+            try:
+                return min(1.0, max(0.0, float(m.get(k))))
+            except (TypeError, ValueError):
+                return 0.5
+        d = self.desk or Desktop()
+        self.desk = d
+        if t == "ptr":
+            d.move(f("x"), f("y"))
+        elif t == "click":
+            d.click(f("x"), f("y"), right=m.get("button") == "right")
+        elif t == "scroll":
+            try:
+                d.wheel(f("x"), f("y"), max(-3000.0, min(3000.0, float(m.get("dy", 0)))))
+            except (TypeError, ValueError):
+                pass
+        elif t == "key" and isinstance(m.get("key"), str):
+            d.key(m["key"])
+        elif t == "text" and isinstance(m.get("s"), str):
+            d.text(_CTRL.sub("", m["s"][:2000]))
+
     async def handle(self, client: Client, m: dict) -> None:
         t = m.get("t")
+        if t == "desktop":
+            if m.get("action") == "start" and not HEADLESS:
+                await self.enter_desktop()
+            return
+        if t == "gallery":
+            if m.get("action") == "play":
+                await self.gallery_play(m.get("r"), m.get("p"))
+            elif m.get("action") == "recast":           # the phone showed a gallery picture: fresh browser frame
+                if self.last_jpeg:
+                    client.push_frame(self.last_jpeg)
+            return
+        if self.mode == "desktop" and t in ("ptr", "click", "scroll", "key", "text"):
+            with contextlib.suppress(Exception):
+                self._desk_input(t, m)
+            return
         if t == "ptr":
             x, y = self._xy(m)
             await self._safe("Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": y})
@@ -2777,7 +2971,59 @@ class VRBrowser:
             await self.cdp.call("Runtime.callFunctionOn", {"objectId": obj["objectId"], "functionDeclaration":
                                 PSEUDO_FS_FN, "arguments": [{"value": True}]}, session=tab.session, timeout=5)
 
+    async def gallery_play(self, r, p) -> None:
+        """Gallery: a video file from the laptop's folders -> the phone's own player (seekable; 360 / 3D from
+        the file name, the phone's picture test, or the user's Y choice, remembered per file)."""
+        import hashlib
+        import gallery
+        from video_resolve import PROJECTIONS, STEREO_OF, find_ffmpeg, find_ffprobe, guess_projection, read_meta
+        path = gallery.resolve(r, p)
+        if path is None or not path.is_file() or gallery.kind(path) != "vid":
+            await self.toast("That video is not in the gallery folders")
+            return
+        if self.mode != "browse":
+            await self.leave_video(None)
+        w, h = await asyncio.to_thread(gallery.video_size, path, find_ffprobe(find_ffmpeg()))
+        key = "gallery_" + hashlib.sha1(str(path).lower().encode()).hexdigest()[:16]
+        meta = await asyncio.to_thread(read_meta, key) or {}
+        proj, src = meta.get("user_projection") or meta.get("projection"), meta.get("projection_source")
+        if proj not in PROJECTIONS:
+            proj, src = guess_projection({"title": path.stem}, w, h)
+        if src not in ("user", "image", "container", "note", "title", "guess"):
+            src = "guess"
+        det = {"projection": proj, "stereo": STEREO_OF.get(proj, "mono"), "projection_source": src,
+               "mesh": False, "mesh_label": None}
+        mid = self._add_media({"f": {"kind": "file", "path": str(path)}})
+        vdesc = {"src": f"/media/{mid}/f?k={self.token}", "index": None, "mime": "video/mp4", "codec": "avc1",
+                 "w": w, "h": h, "fps": 30, "itag": None}
+        self.cur_play = None
+        await self._send_ready(mid, "file", key, path.stem, 0.0, None, vdesc, None, det, f"{w}x{h} (gallery)")
+
+    async def enter_desktop(self) -> None:
+        """B3: Home -> Desktop planet: the laptop's screen on the big screen (Brave's picture stops meanwhile)."""
+        if self.mode == "desktop":
+            await self.broadcast(self.video_msg or {})
+            return
+        if self.mode != "browse":
+            await self.leave_video(None)
+        self.mode = "desktop"
+        self.video_msg = {"t": "video", "state": "screen", "title": "Desktop", "desktop": True}
+        await self.broadcast(self.video_msg)
+        await self.update_cast()
+        self.audio.ensure()
+        log("[desktop] the laptop's screen is on the big screen (the controller drives its mouse)")
+
     async def leave_video(self, at, origin: "Client | None" = None) -> None:
+        if self.mode == "desktop":
+            self.mode = "browse"
+            self.video_msg = None
+            for c in list(self.clients):
+                if c is not origin:
+                    await c.text({"t": "video", "state": "exit"})
+            await self.update_cast()
+            self.audio.ensure()
+            log("[desktop] back to the browser")
+            return
         if self.resolve_task and not self.resolve_task.done():
             self.resolve_task.cancel()
         was = self.mode
@@ -3152,6 +3398,121 @@ def build_app(vb: VRBrowser, ph) -> "FastAPI":
             for t in tasks:
                 t.cancel()
             log(f"[ws] phone disconnected {c.ip} ({c.frames} frames sent)")
+
+    gallery_sem = asyncio.Semaphore(3)                    # thumbnails made at once (Pillow / ffmpeg)
+
+    @app.get("/gallery/list")
+    async def gallery_list(request: Request):
+        if not key_ok(request.query_params.get("k")):
+            return Response(status_code=403)
+        import gallery
+        q = request.query_params
+        return JSONResponse(await asyncio.to_thread(gallery.listing, q.get("r"), q.get("p")), headers=nostore)
+
+    @app.get("/gallery/thumb")
+    async def gallery_thumb(request: Request):
+        if not key_ok(request.query_params.get("k")):
+            return Response(status_code=403)
+        import gallery
+        from video_resolve import find_ffmpeg
+        path = gallery.resolve(request.query_params.get("r"), request.query_params.get("p"))
+        if path is None or not path.is_file():
+            return Response(status_code=404)
+        async with gallery_sem:
+            out = await asyncio.to_thread(gallery.thumb, path, find_ffmpeg())
+        if out is None:
+            return Response(status_code=404)
+        return Response(out.read_bytes(), media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+    @app.get("/gallery/img")
+    async def gallery_img(request: Request):
+        if not key_ok(request.query_params.get("k")):
+            return Response(status_code=403)
+        import gallery
+        path = gallery.resolve(request.query_params.get("r"), request.query_params.get("p"))
+        if path is None or not path.is_file() or gallery.kind(path) != "img":
+            return Response(status_code=404)
+        out = await asyncio.to_thread(gallery.view_image, path)
+        if out is None:
+            return Response(status_code=415)
+        mime = {".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}.get(out.suffix.lower(), "image/jpeg")
+        return Response(await asyncio.to_thread(out.read_bytes), media_type=mime, headers=nostore)
+
+    @app.websocket("/ws/desktop")
+    async def ws_desktop(ws: WebSocket):
+        """B3: the laptop's screen as H.264 (1 byte kind + payload: 0 avcC, 1 key, 2 delta) while on the desktop."""
+        origin = ws.headers.get("origin")
+        host = ws.headers.get("host", "")
+        if not key_ok(ws.query_params.get("k")) or (origin and origin != f"https://{host}"):
+            log(f"[ws] refused desktop {ws.client.host if ws.client else '?'} (key or origin)")
+            await ws.close(code=1008)
+            return
+        await ws.accept()
+        from video_resolve import find_ffmpeg
+        ff = find_ffmpeg()
+        if not ff or vb.mode != "desktop":
+            await ws.close()
+            return
+        import threading
+        loop = asyncio.get_running_loop()
+        recv = asyncio.create_task(ws.receive_text())   # ends when the phone closes the socket
+        proc = None
+        try:
+            for enc in ("qsv", "x264"):
+                q: asyncio.Queue = asyncio.Queue(maxsize=6)
+                st = {"need_key": False, "got": False}
+
+                def deliver(kind, payload, q=q, st=st):
+                    if kind is None:
+                        while q.full():
+                            q.get_nowait()
+                        q.put_nowait(None)
+                        return
+                    if kind == 2 and st["need_key"]:
+                        return
+                    if q.full():
+                        if kind == 2:                     # the phone is behind: skip to the next keyframe
+                            st["need_key"] = True
+                            return
+                        while not q.empty():
+                            q.get_nowait()
+                    if kind == 1:
+                        st["need_key"] = False
+                    q.put_nowait(bytes([kind]) + payload)
+
+                proc = subprocess.Popen(desktop_ffmpeg_cmd(ff, enc), stdout=subprocess.PIPE, stdin=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL, bufsize=0, creationflags=NO_WINDOW)
+                threading.Thread(target=flv_h264_reader, daemon=True,
+                                 args=(proc, lambda k, p: loop.call_soon_threadsafe(deliver, k, p))).start()
+                log(f"[desktop] streaming the screen ({enc}, {DESK_FPS} fps)")
+                while vb.mode == "desktop":
+                    get = asyncio.create_task(q.get())
+                    done, _ = await asyncio.wait({get, recv}, timeout=2, return_when=asyncio.FIRST_COMPLETED)
+                    if recv in done:
+                        get.cancel()
+                        return
+                    if get not in done:
+                        get.cancel()
+                        continue
+                    msg = get.result()
+                    if msg is None:
+                        break
+                    st["got"] = True
+                    await asyncio.wait_for(ws.send_bytes(msg), 5)
+                with contextlib.suppress(Exception):
+                    proc.kill()
+                if vb.mode != "desktop" or st["got"]:
+                    return
+                log(f"[desktop] the {enc} encoder did not start; trying the next one")
+        except Exception:
+            pass
+        finally:
+            recv.cancel()
+            if proc is not None:
+                with contextlib.suppress(Exception):
+                    proc.kill()
+            with contextlib.suppress(Exception):
+                await ws.close()
 
     @app.websocket("/ws/audio")
     async def ws_audio(ws: WebSocket):

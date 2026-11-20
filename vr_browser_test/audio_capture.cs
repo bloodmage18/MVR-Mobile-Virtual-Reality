@@ -146,7 +146,10 @@ static class Program
         }
         string flag = args.Length >= 3 && args[1] == "--mute" ? args[2] : null;
         uint pid;
-        if (args.Length < 1 || !uint.TryParse(args[0], out pid)) { Console.Error.WriteLine("usage: audio_capture <pid>"); return 2; }
+        if (args.Length < 1 || !uint.TryParse(args[0], out pid)) { Console.Error.WriteLine("usage: audio_capture <pid>|0 [--mute <flag>] [--all]"); return 2; }
+        // --all (desktop): every sound of the laptop except this helper's own (pid 0 = this process)
+        bool all = Array.IndexOf(args, "--all") >= 0;
+        if (all && pid == 0) pid = (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
         IAudioEndpointVolume spk = null; bool mutedByUs = false;
         try
         {
@@ -165,7 +168,7 @@ static class Program
                 }
                 catch (Exception e) { Console.Error.WriteLine("audio_capture: mute failed: " + e.Message); }
             }
-            return Run(pid);
+            return Run(pid, all);
         }
         catch (Exception e) { Console.Error.WriteLine("audio_capture: " + e.Message); return 1; }
         finally
@@ -178,9 +181,10 @@ static class Program
         }
     }
 
-    static int Run(uint pid)
+    static int Run(uint pid, bool exclude)
     {
-        var ap = new AUDIOCLIENT_ACTIVATION_PARAMS { ActivationType = 1, TargetProcessId = pid, ProcessLoopbackMode = 0 };
+        // mode 0 = only the target's process tree (Brave), 1 = everything except it (the whole desktop)
+        var ap = new AUDIOCLIENT_ACTIVATION_PARAMS { ActivationType = 1, TargetProcessId = pid, ProcessLoopbackMode = exclude ? 1 : 0 };
         IntPtr pAp = Marshal.AllocHGlobal(Marshal.SizeOf(ap));
         Marshal.StructureToPtr(ap, pAp, false);
         var pv = new BLOB_PROPVARIANT { vt = 65, cbSize = (uint)Marshal.SizeOf(ap), pBlobData = pAp };

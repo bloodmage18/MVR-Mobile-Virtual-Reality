@@ -24,3 +24,4 @@ home_space/service/cache/
 vr_browser_test/profile/
 vr_browser_test/cache/
 vr_browser_test/perf.log
+vr_browser_test/gallery.json

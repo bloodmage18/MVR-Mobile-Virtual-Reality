@@ -93,7 +93,19 @@ Start again closes it.
 
 - **Browser**: back to the browser (also leaves a video).
 - **Tor**: opens a new private window with Tor.
-- **Theater, Gallery, Games, Desktop**: coming soon.
+- **Desktop**: the laptop's screen on the big screen (sharp 1080p, 30 fps; the laptop's Intel GPU compresses it,
+  about 13 % of the laptop's CPU). You drive the laptop's **real** mouse and keyboard: look = mouse pointer,
+  A = click, X = right click, left stick = scroll, L3 = keyboard (types into the laptop), R3 = move / resize
+  the screen, B = back. All the laptop's sound plays on the phone meanwhile (not only Brave's). Someone at the
+  laptop sees the mouse move by itself. Windows' admin prompts ("Do you want to allow…") show black: answer
+  them on the laptop.
+- **Gallery**: the laptop's Pictures and Videos folders as a grid of thumbnails. Look at one (or d-pad), A opens
+  it: a folder opens, a picture fills the big screen (◀ ▶ / LB RB = previous / next, R3 = move / resize,
+  B = back to the grid), a video plays in the video player (360 / 3D detected like other videos, Y fixes it;
+  B = back to the gallery). LB / RB turn pages, B goes up a folder (from the folder list: closes the gallery).
+  Other folders: create `vr_browser_test\gallery.json` with `{"folders": ["D:/Photos", "E:/Videos"]}`.
+  Previews are kept in `cache\thumbs`.
+- **Theater, Games**: coming soon.
 
 The phone draws the planets itself, so they cost the laptop nothing.
 
