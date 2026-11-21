@@ -2184,6 +2184,12 @@ class VRBrowser:
         if t == "gallery":
             if m.get("action") == "play":
                 await self.gallery_play(m.get("r"), m.get("p"))
+            elif m.get("action") == "pin":              # X on a folder: (un)pin it in the gallery's main list
+                import gallery
+                res = await asyncio.to_thread(gallery.pin, m.get("r"), m.get("p"))
+                txt = {"pinned": "Pinned to the gallery's main list", "removed": "Removed from the main list"}.get(res, res)
+                await client.text({"t": "toast", "text": txt})
+                await client.text({"t": "gallery", "pinned": res})
             elif m.get("action") == "recast":           # the phone showed a gallery picture: fresh browser frame
                 if self.last_jpeg:
                     client.push_frame(self.last_jpeg)

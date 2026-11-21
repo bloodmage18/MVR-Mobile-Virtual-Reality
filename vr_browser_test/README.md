@@ -92,6 +92,14 @@ Hold **Start** for about a second: the browser fades away and you float in space
 in front of you (two rows of three). Look at one (or move with the d-pad) and press **A**; **B** or holding
 Start again closes it.
 
+**Themes** (press **Y** while the planets are open; your choice is remembered):
+- **Arc**: two rows of three in front of you.
+- **Solar system**: you are the sun, the apps orbit around you. Spin it with the left stick or LB / RB (hold
+  longer = faster); let go and it coasts, slows down and settles with an app in front of you. The one in front
+  is chosen (or the one you look at); d-pad left / right = one app along.
+- **Tree**: the apps on the branches of a glowing tree: Web (Browser, Tor), Media (Gallery, Theater),
+  Laptop (Desktop, Games). Look at one or use the d-pad (up / down = branch, left / right = side).
+
 - **Browser**: back to the browser (also leaves a video).
 - **Tor**: opens a new private window with Tor.
 - **Desktop**: the laptop's screen on the big screen (sharp 1080p, 30 fps; the laptop's Intel GPU compresses it,
@@ -105,15 +113,24 @@ Start again closes it.
   B = back to the grid), a video plays in the video player (360 / 3D detected like other videos, Y fixes it;
   B = back to the gallery). The left stick scrolls the list (the d-pad highlight
   pulls it along, LB / RB jump a screenful), B goes up a folder (from the folder list: closes the gallery).
-  Other folders: create `vr_browser_test\gallery.json` with `{"folders": ["D:/Photos", "E:/Videos"]}`.
+  **This PC** (on the folder list): Desktop, Downloads, Documents and every drive, to find pictures and videos
+  anywhere on the laptop (hidden folders are shown faded; Windows' own system folders are left out). **X on a folder pins it** to the main list (★);
+  X on a pinned one removes it. Pins are kept in `vr_browser_test\gallery.json` (git-ignored; you can also
+  edit it: `{"folders": ["D:/Photos", "E:/Videos"]}`).
   Previews are kept in `cache\thumbs`.
   **This phone** (last tile of the folder list): photos and videos from the phone itself. The first time (and
   with **Choose…**) take the phone out and **tap the screen**: the phone's own photo picker opens (browsers only
   open it from a real touch). Pick, put the phone back. The files never leave the phone; the list is forgotten
   when the page reloads.
-- **Theater, Games**: coming soon.
+- **Theater**: a modern dark cinema around the big screen: a starry ceiling, dark slat walls with light strips,
+  and the room picks up the colours of what is playing. A menu in front of you: **Seating** (Chairs / Grass /
+  Empty, ◀ ▶), **Room for all videos** (On: browser, YouTube and gallery videos on the big screen play in the
+  cinema too; Off: only here), **Watch from the Gallery**. R3 = screen distance and size, B = close.
+  Choices are remembered. ("Now showing" / continue watching comes next.)
+- **Games**: coming soon.
 
-The phone draws the planets itself, so they cost the laptop nothing.
+The phone draws the planets itself, so they cost the laptop nothing. **B in an app** (Gallery, Theater, Desktop)
+goes back step by step and finally **Home** (the planets); B on Home = the browser.
 
 ## Full screen and the big screen
 

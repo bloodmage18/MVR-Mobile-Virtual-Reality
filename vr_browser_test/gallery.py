@@ -24,27 +24,79 @@ MAX_ITEMS = 5000
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 
-def roots() -> list[tuple[str, Path]]:
-    """[(name, folder)] that exist: gallery.json, else the Windows Pictures / Videos folders."""
-    want: list[Path] = []
+# never shown when browsing the drives (Windows' own folders, program files, settings)
+# never shown (Windows' own folders, program files); hidden folders ARE shown (faded on the phone)
+SKIP_DIRS = {"windows", "program files", "program files (x86)", "programdata", "recovery", "perflogs",
+             "system volume information", "msocache", "config.msi", "onedrivetemp", "$recycle.bin", "$windows.~ws",
+             "$windows.~bt", "$sysreset", "documents and settings"}
+
+
+def favourites() -> list[Path]:
+    """The gallery's main list: gallery.json "folders", else the Windows Pictures / Videos folders."""
     try:
         cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
-        want = [Path(os.path.expandvars(os.path.expanduser(str(f)))) for f in cfg.get("folders") or []]
+        if isinstance(cfg.get("folders"), list):
+            return [Path(os.path.expandvars(os.path.expanduser(str(f)))) for f in cfg["folders"]]
     except (OSError, ValueError, AttributeError):
         pass
-    if not want:
-        home = Path.home()
-        want = [home / "Pictures", home / "Videos", home / "OneDrive" / "Pictures"]
-    out, seen = [], set()
-    for f in want:
-        try:
-            f = f.resolve()
-        except OSError:
-            continue
-        if f.is_dir() and f not in seen:
-            seen.add(f)
-            out.append((f.name or str(f), f))
+    home = Path.home()
+    return [home / "Pictures", home / "Videos", home / "OneDrive" / "Pictures"]
+
+
+def _places() -> list[Path]:
+    """This PC: the usual folders, then every drive."""
+    home = Path.home()
+    out = [home / "Desktop", home / "Downloads", home / "Documents", home / "Pictures", home / "Videos",
+           home / "OneDrive"]
+    if os.name == "nt":
+        import ctypes
+        mask = ctypes.windll.kernel32.GetLogicalDrives()
+        out += [Path(f"{chr(65 + i)}:/") for i in range(26) if mask >> i & 1]
     return out
+
+
+def roots() -> list[tuple[str, Path, str]]:
+    """[(name, folder, "fav" | "pc")] that exist. The phone refers to a folder by its number here."""
+    out, seen = [], set()
+    for group, folders in (("fav", favourites()), ("pc", _places())):
+        for f in folders:
+            try:
+                f = f.resolve()
+                if not f.is_dir():
+                    continue
+            except OSError:
+                continue
+            if (group, f) in seen:
+                continue
+            seen.add((group, f))
+            out.append((f.name or str(f).rstrip("\\/"), f, group))
+    return out
+
+
+def _save_favourites(folders: list[Path]) -> None:
+    try:
+        cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
+        if not isinstance(cfg, dict):
+            cfg = {}
+    except (OSError, ValueError):
+        cfg = {}
+    cfg["folders"] = [f.as_posix() for f in folders]
+    CONFIG.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+
+
+def pin(r, p) -> str:
+    """X on a folder: add it to the gallery's main list (or remove it when it is one of them)."""
+    path = resolve(r, p)
+    if path is None or not path.is_dir():
+        return "not a folder"
+    favs = [f.resolve() for f in favourites() if f.exists()]
+    if path in favs:
+        favs.remove(path)
+        _save_favourites(favs)
+        return "removed"
+    favs.append(path)
+    _save_favourites(favs)
+    return "pinned"
 
 
 def resolve(r, p) -> Path | None:
@@ -71,20 +123,29 @@ def listing(r, p) -> dict:
     """{"title", "items": [{"n": name, "t": "root"|"dir"|"img"|"vid", "r", "p"}]}: folders first (by name),
     then pictures and videos (newest first)."""
     if r is None or str(r) in ("", "-1"):
-        return {"title": "Gallery", "items": [{"n": name, "t": "root", "r": i, "p": ""}
-                                              for i, (name, _) in enumerate(roots())]}
+        return {"title": "Gallery", "items": [{"n": name, "t": "root", "r": i, "p": "", "fav": True}
+                                              for i, (name, _, g) in enumerate(roots()) if g == "fav"]
+                + [{"n": "This PC", "t": "pc", "r": "pc", "p": ""}]}
+    if str(r) == "pc":
+        return {"title": "This PC", "items": [{"n": name, "t": "root", "r": i, "p": ""}
+                                              for i, (name, _, g) in enumerate(roots()) if g == "pc"]}
     folder = resolve(r, p)
     if folder is None or not folder.is_dir():
         return {"title": "Gallery", "items": [], "error": "folder not found"}
     base = roots()[int(r)][1]
-    dirs, files = [], []
+    dirs, files, hidden_dirs = [], [], set()
     try:
         with os.scandir(folder) as it:
             for e in it:
-                if e.name.startswith((".", "$")) or e.name.lower() in ("desktop.ini", "thumbs.db"):
+                if e.name.lower() in ("desktop.ini", "thumbs.db") or e.name.lower() in SKIP_DIRS:
                     continue
                 try:
                     if e.is_dir():
+                        attrs = getattr(e.stat(), "st_file_attributes", 0)
+                        if attrs & 0x400 and attrs & 0x4:      # system junctions ("My Music" links in Documents)
+                            continue
+                        if attrs & 0x2 or e.name.startswith("."):
+                            hidden_dirs.add(e.name)
                         dirs.append(e.name)
                     elif kind(Path(e.name)):
                         files.append((e.stat().st_mtime, e.name))
@@ -97,7 +158,8 @@ def listing(r, p) -> dict:
     rel = folder.relative_to(base).as_posix()
     rel = "" if rel == "." else rel
     join = (lambda n: f"{rel}/{n}") if rel else (lambda n: n)
-    items = [{"n": d, "t": "dir", "r": int(r), "p": join(d)} for d in sorted(dirs, key=str.lower)]
+    items = [{"n": d, "t": "dir", "r": int(r), "p": join(d), **({"hid": True} if d in hidden_dirs else {})}
+             for d in sorted(dirs, key=str.lower)]
     items += [{"n": n, "t": kind(Path(n)), "r": int(r), "p": join(n)} for _, n in sorted(files, reverse=True)]
     title = roots()[int(r)][0] + (" / " + rel if rel else "")
     return {"title": title, "items": items}

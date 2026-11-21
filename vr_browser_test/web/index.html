@@ -260,6 +260,7 @@ uniform vec2 uTexel;         // 1 / texture size
 uniform vec3 uEac[6];        // EAC face table: tile column, tile row, rotation (faces: left front right bottom back top)
 uniform float uAlpha;
 uniform vec4 uColor;
+uniform vec3 uTint;           // T1: the theater room takes the colour of the screen (1, 1, 1 = no tint)
 const float PI = 3.14159265;
 vec2 eacUV(vec3 d) {
   vec3 a = abs(d);
@@ -307,7 +308,7 @@ void main() {
       c = textureGrad(uTex, st, g1x * uWin.zw, g1y * uWin.zw);
       if (uProj == 2 && (su.x < 0.0 || su.x > 1.0)) c = vec4(0.0, 0.0, 0.0, 1.0);
     }
-    o = vec4(c.rgb, uAlpha);
+    o = vec4(c.rgb * uTint, uAlpha * c.a);            // the picture's own transparency (planets, glows, the tree)
   } else if (uMode == 1) {
     o = vec4(uColor.rgb, uColor.a * uAlpha);
   } else if (uMode == 2) {
@@ -342,10 +343,11 @@ if (gl) {
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
   gl.useProgram(prog);
   for (const n of ["uVP", "uModel", "uGeo", "uScr", "uScrY", "uPt", "uMode", "uSharp", "uProj", "uTex", "uUVT", "uWin",
-                   "uTexel", "uEac", "uAlpha", "uColor"])
+                   "uTexel", "uEac", "uAlpha", "uColor", "uTint"])
     U[n] = gl.getUniformLocation(prog, n);
   for (const n of ["aPos", "aUV"]) A[n] = gl.getAttribLocation(prog, n);
   gl.uniform1i(U.uTex, 0);
+  gl.uniform3f(U.uTint, 1, 1, 1);
   gl.uniform3fv(U.uEac, new Float32Array([].concat(...EAC_FACES)));
   gl.disable(gl.DEPTH_TEST);              // everything is drawn back to front
   gl.enable(gl.BLEND);
@@ -451,8 +453,19 @@ function setTexMips(T, on) {             // switch the min filter (and build the
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, on ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
   if (on) gl.generateMipmap(gl.TEXTURE_2D);
 }
-let panelTex, videoTex, hudTex;
-if (gl) { panelTex = makeTex(); videoTex = makeTex(); hudTex = makeTex(); }
+let panelTex, videoTex, hudTex, altTex;
+if (gl) { panelTex = makeTex(); videoTex = makeTex(); hudTex = makeTex(); altTex = makeTex(); }
+// the big screen shows the browser's picture, or (gallery picture / desktop) its own one: going back to the
+// browser never shows a leftover picture
+function screenTex() { return desk.on || gal.viewing ? altTex : panelTex; }
+const altCanvas = document.createElement("canvas"); altCanvas.width = 1280; altCanvas.height = 720;
+function altPlaceholder(line1, line2) {
+  const g = altCanvas.getContext("2d");
+  g.fillStyle = "#0b0e16"; g.fillRect(0, 0, 1280, 720);
+  g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#f2f5fa"; g.font = "600 64px system-ui, sans-serif";
+  g.fillText(line1, 640, 320); g.fillStyle = "#8a96ad"; g.font = "400 38px system-ui, sans-serif"; g.fillText(line2 || "", 640, 410);
+  if (gl) uploadTex(altTex, altCanvas, 1280, 720);
+}
 
 // Placeholder page shown on the panel until the first browser frame arrives (and for new windows)
 const phCanvas = document.createElement("canvas"); phCanvas.width = 1280; phCanvas.height = 720;
@@ -975,8 +988,8 @@ function deskDecoder(desc) {
     output: (frame) => {
       if (desk.on) {
         const w = frame.displayWidth, h = frame.displayHeight;
-        if (!uploadTex(panelTex, frame, w, h)) {            // older WebKit: go through an ImageBitmap
-          createImageBitmap(frame).then((b) => { uploadTex(panelTex, b, w, h); b.close && b.close(); }).catch(() => {});
+        if (!uploadTex(altTex, frame, w, h)) {              // older WebKit: go through an ImageBitmap
+          createImageBitmap(frame).then((b) => { uploadTex(altTex, b, w, h); b.close && b.close(); }).catch(() => {});
         }
         desk.w = w; desk.h = h; desk.frames++; state.frameSeen = true;
       }
@@ -995,7 +1008,7 @@ function desktopStart() {
     send({t: "vr", action: "exit"}); return;
   }
   desk.on = true; desk.frames = 0;
-  drawPlaceholder("Desktop", "Connecting to the laptop's screen…");
+  altPlaceholder("Desktop", "Connecting to the laptop's screen…");
   const open = () => {
     if (!desk.on) return;
     const ws = desk.ws = new WebSocket(`wss://${location.host}/ws/desktop?k=${encodeURIComponent(KEY)}`);
@@ -1095,6 +1108,9 @@ function onMessage(m) {
       hudShow({title: m.text || "", text: ""}, 4500);
       break;
     case "video": onVideoMsg(m); break;
+    case "gallery":                              // a folder was (un)pinned: the main list changed
+      if (gal.r === -1) galLoad(-1, "", true);
+      break;
   }
 }
 
@@ -1346,6 +1362,7 @@ function stopVideo() {
   if (meshGL) { meshGL.list.forEach((e) => freeMesh(e.mesh)); meshGL = null; }
 }
 function exitVr() {
+  const fromDesktop = desk.on;
   if (state.mode === "vr") {
     send({t: "vr", action: "exit", time: videoPos()});
     stopVideo();
@@ -1355,6 +1372,7 @@ function exitVr() {
   setMode("browser");
   hudHide();
   if (gal.resume) { gal.resume = false; galShow(); }   // a gallery video: back to the gallery
+  else if (fromDesktop) launcherToggle(true);          // the desktop: back Home
 }
 function failToBrowser(title, text) {            // the v1 error card: back to the browser, keep the position
   const t = videoPos();
@@ -2600,7 +2618,7 @@ function uiActivity(b) {                         // every input wakes the UI (D1
 function closeLens() { lensPanel.hidden = true; crossL.hidden = true; crossR.hidden = true; }
 // ── B2: R3 in full screen (cinema screen) = screen adjust: distance and size ──
 let scrAdj = false;
-function fullScreenView() { return state.mode === "screen" || (state.mode === "vr" && isCinema(state.proj)); }
+function fullScreenView() { return state.mode === "screen" || (state.mode === "vr" && isCinema(state.proj)) || theater.menu; }
 let scrAdjKey = "";
 function scrAdjShow() {
   const title = `Screen: ${userDist.toFixed(1)} m away, size ${Math.round(cinemaSpan() / deg)}°`;
@@ -2638,6 +2656,8 @@ function onButton(b) {
     return;
   }
   if (gal.open && b !== 6 && b !== 4) { galButton(b); return; }
+  if (theater.menu && b === 8) { scrAdjToggle(!scrAdj); return; }
+  if (theater.menu && !scrAdj && b !== 6 && b !== 4) { theaterButton(b); return; }
   if (scrAdj && scrAdjButton(b)) return;
   if (b === 7) { kbToggle(); return; }           // L3: keyboard on / off, in every mode
   if (kb.open && kbButton(b)) return;
@@ -2749,6 +2769,12 @@ function pollPads(dt) {
     return;
   }
   stick.dir = 0;
+  if (launcher.open) {                           // Home: the stick spins the solar system; right stick nudges
+    launcherTick(dt, p);
+    state.curYaw = clamp(state.curYaw + p.rx * 1.1 * dt, -0.6, 0.6);
+    state.curPitch = clamp(state.curPitch - p.ry * 1.1 * dt, -0.5, 0.5);
+    return;
+  }
   if (gal.open && !launcher.open) {              // the gallery: left stick scrolls it (down = further down)
     if (p.ly) galScrollTo(gal.scrollT + p.ly * Math.abs(p.ly) * 7 * dt);
     state.curYaw = clamp(state.curYaw + p.rx * 1.1 * dt, -0.6, 0.6);      // right stick still nudges the pointer
@@ -2941,7 +2967,13 @@ const APPS = [
   {id: "games", name: "Games", c: ["#fff0a0", "#e0a81c", "#5a3a00"], ring: true},
   {id: "desktop", name: "Desktop", c: ["#eef1f7", "#8a93a6", "#262b36"]},
 ];
-const launcher = {open: false, a: 0, yaw: 0, hi: -1, hiSrc: "", ui: []};
+// Themes (Y while the planets are open; remembered): arc = two rows in front; orbit = the solar system, you are
+// the sun and the apps circle around you (spin it, the one in front is chosen); tree = apps on the branches.
+const HOME_THEMES = ["arc", "orbit", "tree"];
+const HOME_THEME_NAMES = {arc: "Arc", orbit: "Solar system", tree: "Tree"};
+let homeTheme = "arc";
+try { const t = localStorage.getItem("vrb_home_theme"); if (HOME_THEMES.includes(t)) homeTheme = t; } catch (_) {}
+const launcher = {open: false, a: 0, yaw: 0, hi: -1, hiSrc: "", ui: [], spin: 0, vel: 0, snap: null};
 function planetDraw(i) {
   const app = APPS[i], U = launcher.ui[i] || (launcher.ui[i] = uiCanvas(512, 640)), g = U.g, on = launcher.hi === i;
   const key = on ? "on" : "off";
@@ -2968,13 +3000,109 @@ function planetDraw(i) {
   g.textAlign = "center"; g.textBaseline = "middle";
   g.font = `700 ${on ? 76 : 68}px ${FONT}`; g.fillStyle = on ? "#ffffff" : "#c9d2e3";
   g.fillText(app.name, cx, 560);
-  if (!["browser", "tor", "desktop", "gallery"].includes(app.id)) { g.font = `500 34px ${FONT}`; g.fillStyle = "#7d889e"; g.fillText("coming soon", cx, 618); }
+  if (!["browser", "tor", "desktop", "gallery", "theater"].includes(app.id)) { g.font = `500 34px ${FONT}`; g.fillStyle = "#7d889e"; g.fillText("coming soon", cx, 618); }
   uploadTex(U.T, U.c, 512, 640);
 }
-const PLANET_COLS = 3;                           // two rows of three: all in view at once
+const PLANET_COLS = 3;                           // arc: two rows of three, all in view at once
+const ORBIT_R = 2.6, ORBIT_STEP = 2 * Math.PI / APPS.length;
+// tree: three levels of two (Web: Browser, Tor / Media: Gallery, Theater / Laptop: Desktop, Games)
+const TREE_SLOTS = [0, 1, 3, 2, 5, 4];            // slot (level * 2 + side) -> app index
+const TREE_X = 0.72, TREE_Y = [0.78, 0, -0.78], TREE_D = 3;
+const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+function orbitAngle(i) { return launcher.spin + i * ORBIT_STEP; }
+function orbitFront() {                           // the app nearest straight ahead
+  let best = 0, d = 9;
+  for (let i = 0; i < APPS.length; i++) { const a = Math.abs(wrapAngle(orbitAngle(i))); if (a < d) { d = a; best = i; } }
+  return best;
+}
 function planetQuad(i) {
-  const col = i % PLANET_COLS, row = Math.floor(i / PLANET_COLS), s = launcher.hi === i ? 1.18 : 1;
+  const s = launcher.hi === i ? 1.18 : 1;
+  if (homeTheme === "orbit") {
+    const front = 1 - Math.min(1, Math.abs(wrapAngle(orbitAngle(i))) / ORBIT_STEP);   // grows as it comes in front
+    const k = s * (1 + 0.25 * front);
+    return quadAt(launcher.yaw + orbitAngle(i), -4 * deg, ORBIT_R, 0.62 * k, 0.775 * k);
+  }
+  if (homeTheme === "tree") {
+    const slot = TREE_SLOTS.indexOf(i), M = rotY(launcher.yaw);
+    const pos = [(slot % 2 ? 1 : -1) * TREE_X, TREE_Y[Math.floor(slot / 2)], -TREE_D];
+    return {M, c: mv3(M, pos), w: 0.56 * s, h: 0.7 * s};
+  }
+  const col = i % PLANET_COLS, row = Math.floor(i / PLANET_COLS);
   return quadAt(launcher.yaw + ((PLANET_COLS - 1) / 2 - col) * 20 * deg, (row ? -17 : 8) * deg, 2.6, 0.62 * s, 0.775 * s);
+}
+// the tree itself: trunk, branches to the six apps, group names (drawn once)
+const treeUi = uiCanvas(1024, 1536);
+function treeDraw() {
+  const U = treeUi, g = U.g;
+  if (U.key === "ok") return;
+  U.key = "ok";
+  g.clearRect(0, 0, 1024, 1536);
+  const px = (x) => (x / 2.0 + 0.5) * 1024, py = (y) => (0.5 - y / 3.0) * 1536;   // quad: 2.0 x 3.0 m
+  const glowLine = (pts, w) => {
+    for (const [lw, col] of [[w * 3.2, "rgba(120,200,255,.10)"], [w * 1.8, "rgba(120,200,255,.25)"], [w, "#bfe6ff"]]) {
+      g.strokeStyle = col; g.lineWidth = lw; g.lineCap = "round"; g.lineJoin = "round";
+      g.beginPath(); g.moveTo(...pts[0]);
+      if (pts.length === 3) g.quadraticCurveTo(...pts[1], ...pts[2]); else g.lineTo(...pts[1]);
+      g.stroke();
+    }
+  };
+  glowLine([[512, 1536], [512, py(TREE_Y[0]) - 60]], 14);                 // trunk
+  TREE_Y.forEach((y) => [-1, 1].forEach((sd) => {                          // branches curving up to each app
+    glowLine([[512, py(y) + 70], [512 + sd * 160, py(y) + 60], [px(sd * TREE_X * 0.78), py(y)]], 8);
+  }));
+  for (let r = 0; r < 3; r++) {                                            // roots
+    glowLine([[512, 1500], [512 + (r - 1) * 120, 1520], [512 + (r - 1) * 300, 1536]], 6);
+  }
+  g.textAlign = "center"; g.textBaseline = "middle"; g.font = `700 40px ${FONT}`;
+  ["Web", "Media", "Laptop"].forEach((t, k) => {            // group names on a dark tag across the trunk
+    const y = py(TREE_Y[k]) - 120, w = g.measureText(t).width + 40;
+    g.fillStyle = "rgba(8,14,28,.92)"; rr(g, 512 - w / 2, y - 30, w, 60, 30); g.fill();
+    g.strokeStyle = "#4f86b8"; g.lineWidth = 3; g.stroke();
+    g.fillStyle = "#cfe8ff"; g.fillText(t, 512, y);
+  });
+  for (let k = 0; k < 40; k++) {                                           // sparkles (fixed pattern)
+    const x = 512 + Math.sin(k * 12.9898) * 430, y = 200 + ((k * 78.233) % 1100);
+    g.fillStyle = `rgba(190,230,255,${0.15 + (k % 5) * 0.08})`; g.beginPath(); g.arc(x, y, 3 + (k % 3), 0, 2 * Math.PI); g.fill();
+  }
+  uploadTex(U.T, U.c, 1024, 1536);
+}
+function treeQuad() { const M = rotY(launcher.yaw); return {M, c: mv3(M, [0, 0, -TREE_D - 0.05]), w: 2.0, h: 3.0}; }
+function homeHelp() {
+  return homeTheme === "orbit" ? "Spin: left stick / LB RB (hold = faster). The one in front is chosen.  A = open  Y = theme"
+       : homeTheme === "tree" ? "Look at an app or use the d-pad.  A = open  Y = theme  B = close"
+       : "Look at a planet and press A.  Y = theme  B = close";
+}
+function homeThemeNext() {
+  homeTheme = HOME_THEMES[(HOME_THEMES.indexOf(homeTheme) + 1) % HOME_THEMES.length];
+  try { localStorage.setItem("vrb_home_theme", homeTheme); } catch (_) {}
+  launcher.yaw = headYawOf(currentRotation());
+  launcher.vel = 0; launcher.snap = null;
+  launcher.hi = homeTheme === "orbit" ? orbitFront() : -1; launcher.hiSrc = homeTheme === "orbit" ? "spin" : "";
+  hudShow({title: HOME_THEME_NAMES[homeTheme], text: homeHelp()}, 3500);
+}
+// solar system: stick / LB RB spin it (the longer you push, the faster), let go = it coasts, slows and
+// settles with an app in front
+function launcherTick(dt, p) {
+  if (!launcher.open || homeTheme !== "orbit") return;
+  const now = performance.now();
+  let push = p.lx;
+  if ((p.bits >> 10) & 1 && now - (holdSince[10] || now) > 250) push = 1;
+  if ((p.bits >> 9) & 1 && now - (holdSince[9] || now) > 250) push = -1;
+  if (push) {
+    launcher.snap = null;
+    launcher.vel = clamp(launcher.vel + push * 5 * dt, -7, 7);
+  } else if (launcher.snap == null) {
+    launcher.vel *= Math.exp(-1.6 * dt);
+    if (Math.abs(launcher.vel) < 0.45) {         // slow enough: settle on the nearest app
+      launcher.snap = Math.round(launcher.spin / ORBIT_STEP + Math.sign(launcher.vel) * 0.2) * ORBIT_STEP;
+      launcher.vel = 0;
+    }
+  }
+  if (launcher.snap != null) {
+    launcher.spin = approach(launcher.spin, launcher.snap, dt, 0.12);
+    if (Math.abs(launcher.spin - launcher.snap) < 0.001) launcher.spin = launcher.snap;
+  } else launcher.spin += launcher.vel * dt;
+  if (launcher.hiSrc !== "gaze" || Math.abs(launcher.vel) > 0.3) { launcher.hi = orbitFront(); launcher.hiSrc = "spin"; }
 }
 function launcherToggle(on) {
   if (on === launcher.open) return;
@@ -2982,24 +3110,43 @@ function launcherToggle(on) {
   if (on) {
     launcher.yaw = headYawOf(currentRotation());
     if (gal.open) galHide();
+    theater.menu = false;
     if (gal.viewing) { gal.viewing = null; setMode("browser"); send({t: "gallery", action: "recast"}); }
     launcher.hi = -1; launcher.hiSrc = "";
+    launcher.vel = 0; launcher.snap = Math.round(launcher.spin / ORBIT_STEP) * ORBIT_STEP;
+    if (homeTheme === "orbit") { launcher.hi = orbitFront(); launcher.hiSrc = "spin"; }
     if (kb.open) kbClose();
-    hudShow({title: "Home", text: "Look at a planet and press A.  B = close"}, 2500);
+    hudShow({title: "Home · " + HOME_THEME_NAMES[homeTheme], text: homeHelp()}, 3000);
   }
 }
 function launcherGaze(o, dir) {                  // the planet you look at (the d-pad choice stays for 4 s)
   let hit = -1, hp = null;
+  if (homeTheme === "orbit" && Math.abs(launcher.vel) > 0.3) return null;
   for (let i = 0; i < APPS.length; i++) {
     const h = hitQuad(planetQuad(i), o, dir);
     if (h && h.v < 0.8) { hit = i; hp = h; break; }
   }
   if (hit >= 0) { launcher.hi = hit; launcher.hiSrc = "gaze"; }
-  else if (launcher.hiSrc === "gaze") launcher.hi = -1;
+  else if (launcher.hiSrc === "gaze") { launcher.hi = homeTheme === "orbit" ? orbitFront() : -1; launcher.hiSrc = homeTheme === "orbit" ? "spin" : ""; }
   return hp;
 }
 function launcherButton(b) {
   const n = APPS.length;
+  if (b === 3) { homeThemeNext(); return; }
+  if (homeTheme === "orbit" && (b === 13 || b === 14 || b === 9 || b === 10)) {   // one app along
+    const base = launcher.snap != null ? launcher.snap : Math.round(launcher.spin / ORBIT_STEP) * ORBIT_STEP;
+    launcher.vel = 0; launcher.snap = base + (b === 14 || b === 10 ? 1 : -1) * ORBIT_STEP;
+    launcher.hiSrc = "spin";
+    return;
+  }
+  if (homeTheme === "tree" && b >= 11 && b <= 14) {                 // up / down = level, left / right = side
+    let slot = launcher.hi < 0 ? 0 : TREE_SLOTS.indexOf(launcher.hi);
+    if (b === 11) slot = Math.max(slot % 2, slot - 2);
+    else if (b === 12) slot = Math.min(4 + slot % 2, slot + 2);
+    else slot = slot - (slot % 2) + (b === 14 ? 1 : 0);
+    launcher.hi = TREE_SLOTS[slot]; launcher.hiSrc = "pad";
+    return;
+  }
   if (b >= 11 && b <= 14) {                     // d-pad: left / right in the row, up / down between the rows
     if (launcher.hi < 0) launcher.hi = 0;
     else if (b === 13 || b === 14) launcher.hi = (launcher.hi + (b === 14 ? 1 : -1) + n) % n;
@@ -3013,6 +3160,7 @@ function launchApp(app) {
   launcherToggle(false);
   if (app.id === "browser") { if (state.mode !== "browser") exitVr(); return; }
   if (app.id === "tor") { if (state.mode !== "browser") exitVr(); newTorWindow(); return; }
+  if (app.id === "theater") { theaterOpen(); return; }
   if (app.id === "gallery") { if (state.mode === "vr") exitVr(); else if (state.mode === "screen") exitVr(); galShow(); return; }
   if (app.id === "desktop") {
     if (state.mode === "vr") exitVr();
@@ -3098,7 +3246,7 @@ function galDraw() {
   g.fillText(fitText(g, gal.title, 1300), 48, 78);
   g.textAlign = "right"; g.fillStyle = "#9aa6bd"; g.font = `500 40px ${FONT}`;
   const n = gal.items.length;
-  g.fillText(gal.busy ? "Loading…" : `${n} item${n === 1 ? "" : "s"}${galMaxScroll() ? "   stick = scroll" : ""}   B = back`, 2000, 78);
+  g.fillText(gal.busy ? "Loading…" : `${n} item${n === 1 ? "" : "s"}${galMaxScroll() ? "   stick = scroll" : ""}   X = pin   B = back`, 2000, 78);
   if (gal.err || (!gal.busy && !gal.items.length)) {
     g.textAlign = "center"; g.fillStyle = "#9aa6bd"; g.font = `500 52px ${FONT}`;
     g.fillText(gal.err || "No pictures or videos here", 1024, 700);
@@ -3108,6 +3256,7 @@ function galDraw() {
   shown.forEach((it, i) => {
     const x = (i % GAL_COLS) * tw, y = GAL_HEAD + (r0 + Math.floor(i / GAL_COLS) - gal.scroll) * th, on = start + i === gal.hi;
     const ix = x + 22, iy = y + 14, iw = tw - 44, ih = th - 92;
+    g.globalAlpha = it.hid ? 0.5 : 1;            // hidden folders: shown, but faded
     g.fillStyle = on ? "#1d2a44" : "#121826"; rr(g, x + 10, y + 4, tw - 20, th - 12, 22); g.fill();
     if (on) { g.strokeStyle = "#2f81f7"; g.lineWidth = 8; g.stroke(); }
     const img = thumbs[i];
@@ -3119,10 +3268,11 @@ function galDraw() {
       g.restore();
     } else {
       g.fillStyle = "#1a2233"; rr(g, ix, iy, iw, ih, 14); g.fill();
-      const folder = it.t === "dir" || it.t === "root" || it.t === "phone";
+      const folder = it.t === "dir" || it.t === "root" || it.t === "phone" || it.t === "pc";
       g.textAlign = "center"; g.fillStyle = folder ? "#ffd23a" : it.t === "pick" ? "#2f81f7" : "#55607a";
       g.font = `600 ${folder || it.t === "pick" ? 150 : 70}px ${FONT}`;
-      g.fillText(it.t === "phone" ? "▯" : it.t === "pick" ? "+" : folder ? "▰" : "…", ix + iw / 2, iy + ih / 2);
+      g.fillText(it.t === "phone" ? "▯" : it.t === "pc" ? "▣" : it.t === "pick" ? "+" : folder ? "▰" : "…", ix + iw / 2, iy + ih / 2);
+      if (it.fav) { g.font = `600 56px ${FONT}`; g.fillStyle = "#ffd23a"; g.fillText("★", ix + iw - 40, iy + 44); }
     }
     if (it.t === "vid") {                        // play badge
       g.fillStyle = "rgba(0,0,0,.55)"; g.beginPath(); g.arc(ix + iw / 2, iy + ih / 2, 54, 0, 2 * Math.PI); g.fill();
@@ -3132,6 +3282,7 @@ function galDraw() {
     g.textAlign = "center"; g.fillStyle = on ? "#ffffff" : "#c9d2e3"; g.font = `${on ? 700 : 500} 40px ${FONT}`;
     g.fillText(fitText(g, it.n, tw - 50), x + tw / 2, y + th - 46);
   });
+  g.globalAlpha = 1;
   g.restore();
   const max = galMaxScroll();
   if (max > 0) {                                 // scrollbar on the right
@@ -3169,14 +3320,23 @@ function galButton(b) {
   } else if (b === 0) {
     const it = gal.items[gal.hi];
     if (it) galOpenItem(it);
+  } else if (b === 2) {                          // X: pin / unpin a folder in the gallery's main list
+    const it = gal.items[gal.hi];
+    if (it && (it.t === "dir" || it.t === "root") && it.r !== "phone") send({t: "gallery", action: "pin", r: it.r, p: it.p});
+    else hint("X pins folders", 1200);
   } else if (b === 1) {                          // back: up one folder; from the folder list: close
     if (gal.stack.length) { const s = gal.stack.pop(); galLoad(s.r, s.p, true); gal.scroll = gal.scrollT = s.scroll; gal.hi = s.hi; }
     else if (gal.r !== -1) galLoad(-1, "");
-    else galHide();
+    else { galHide(); launcherToggle(true); }          // the gallery's folder list: B = back Home
   }
 }
 function galOpenItem(it) {
   if (it.t === "pick") { phonePickArm(); return; }
+  if (it.t === "pc") {                           // This PC: the usual folders and every drive
+    gal.stack.push({r: gal.r, p: gal.p, scroll: gal.scrollT, hi: gal.hi});
+    galLoad("pc", "");
+    return;
+  }
   if (it.t === "phone") {
     gal.stack.push({r: gal.r, p: gal.p, scroll: gal.scrollT, hi: gal.hi});
     if (gal.phone.length) galPhoneList(); else { galPhoneList(); phonePickArm(); }
@@ -3198,6 +3358,7 @@ function galView(i) {
   const it = gal.items[i];
   if (!it || it.t !== "img") return;
   gal.viewing = {i}; gal.hi = i;
+  altPlaceholder(it.n, "Loading…");
   galHide();
   setMode("screen");
   hudShow({title: it.n, text: "◀ ▶ = previous / next   R3 = move / resize   B = back"}, 2500);
@@ -3214,7 +3375,7 @@ function galView(i) {
     })
     .then((bmp) => {
       if (!gal.viewing || gal.viewing.i !== i) { bmp.close && bmp.close(); return; }
-      uploadTex(panelTex, bmp, bmp.width, bmp.height); gal.vw = bmp.width; gal.vh = bmp.height;
+      uploadTex(altTex, bmp, bmp.width, bmp.height); gal.vw = bmp.width; gal.vh = bmp.height;
       bmp.close && bmp.close();
     })
     .catch(() => hudShow({title: it.n, text: "This picture can't be shown"}, 3000));
@@ -3297,6 +3458,234 @@ function galViewClose() {
   setMode("browser");
   send({t: "gallery", action: "recast"});        // the browser picture again (the next time the panel shows)
   galShow();
+}
+
+// ── Theater (T1): a modern dark cinema around the big screen: starry ceiling, slat walls with light strips,
+// seating = chairs / grass / empty (the Theater planet's menu; remembered). The room takes the colour of the
+// screen. "Room for all videos" = it also appears for browser / YouTube / gallery videos on the big screen.
+const theater = {seat: "chairs", forAll: true, menu: false, a: 0, hi: 0, yaw: 0, tint: [0.55, 0.58, 0.7],
+                 tintT: [0.55, 0.58, 0.7], sampledAt: 0, tex: null, fb: null, ui: null, scr: null};
+try { const t = JSON.parse(localStorage.getItem("vrb_theater") || "{}");
+      if (["chairs", "grass", "empty"].includes(t.seat)) theater.seat = t.seat;
+      if (typeof t.forAll === "boolean") theater.forAll = t.forAll; } catch (_) {}
+const SEATS = ["chairs", "grass", "empty"], SEAT_NAMES = {chairs: "Chairs", grass: "Grass", empty: "Empty"};
+const ROOM = {eye: 1.2, slope: 0.29, ceil: 3.4, back: 2.5};      // eye 1.2 m above our floor; rows step down
+function theaterSave() { try { localStorage.setItem("vrb_theater", JSON.stringify({seat: theater.seat, forAll: theater.forAll})); } catch (_) {} }
+function theaterWanted() {
+  if (theater.menu) return true;
+  return theater.forAll && ((state.mode === "vr" && isCinema(state.proj)) || state.mode === "screen");
+}
+function roomTex(w, h, draw) {                   // a repeating canvas texture, drawn once
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  draw(c.getContext("2d"), w, h);
+  const T = makeTex(true);
+  uploadTex(T, c, w, h);
+  gl.bindTexture(gl.TEXTURE_2D, T.tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+  return T;
+}
+function rnd(k) { const x = Math.sin(k * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }   // fixed pattern
+function theaterTextures() {
+  if (theater.tex) return theater.tex;
+  const t = {};
+  t.stars = roomTex(1024, 1024, (g, w, h) => {
+    g.fillStyle = "#03050c"; g.fillRect(0, 0, w, h);
+    for (const [x, y, r, col] of [[300, 260, 420, "rgba(70,40,120,.18)"], [760, 700, 380, "rgba(30,60,120,.16)"]]) {
+      const n = g.createRadialGradient(x, y, 0, x, y, r); n.addColorStop(0, col); n.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = n; g.fillRect(0, 0, w, h);
+    }
+    for (let k = 0; k < 700; k++) {
+      const x = rnd(k) * w, y = rnd(k + 999) * h, b = rnd(k + 77), r = b > 0.97 ? 2.6 : b > 0.85 ? 1.6 : 0.9;
+      g.fillStyle = b > 0.95 ? "#ffe9c4" : b > 0.9 ? "#c8dcff" : `rgba(255,255,255,${0.35 + b * 0.6})`;
+      g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill();
+    }
+  });
+  t.wall = roomTex(512, 512, (g, w, h) => {      // dark acoustic slats, a cool light strip at the top, warm at the bottom
+    g.fillStyle = "#0b0d12"; g.fillRect(0, 0, w, h);
+    for (let x = 0; x < w; x += 64) { g.fillStyle = "#12151c"; g.fillRect(x + 6, 0, 46, h); g.fillStyle = "#171b24"; g.fillRect(x + 6, 0, 3, h); }
+    const strip = (y, col) => { const gr = g.createLinearGradient(0, y - 14, 0, y + 14); gr.addColorStop(0, "rgba(0,0,0,0)");
+      gr.addColorStop(0.5, col); gr.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = gr; g.fillRect(0, y - 14, w, 28); };
+    strip(24, "rgba(90,150,255,.55)"); strip(h - 30, "rgba(255,170,90,.45)");
+  });
+  t.carpet = roomTex(512, 512, (g, w, h) => {
+    g.fillStyle = "#0c0e16"; g.fillRect(0, 0, w, h);
+    for (let k = 0; k < 2600; k++) { g.fillStyle = `rgba(${40 + rnd(k) * 40},${40 + rnd(k + 5) * 30},${70 + rnd(k + 9) * 50},.18)`;
+      g.fillRect(rnd(k + 1) * w, rnd(k + 2) * h, 2, 2); }
+  });
+  t.grass = roomTex(512, 512, (g, w, h) => {
+    g.fillStyle = "#0d2410"; g.fillRect(0, 0, w, h);
+    for (let k = 0; k < 2400; k++) {
+      const x = rnd(k) * w, y = rnd(k + 3) * h, l = 8 + rnd(k + 4) * 16, lean = (rnd(k + 6) - 0.5) * 8;
+      g.strokeStyle = `rgb(${20 + rnd(k + 7) * 40},${70 + rnd(k + 8) * 90},${25 + rnd(k + 9) * 30})`; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + lean, y - l); g.stroke();
+    }
+  });
+  t.floor = roomTex(512, 512, (g, w, h) => {     // empty: a dark polished floor
+    const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, "#0a0b10"); gr.addColorStop(1, "#11131a");
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    g.strokeStyle = "rgba(255,255,255,.035)"; g.lineWidth = 2;
+    for (let x = 0; x <= w; x += 128) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); }
+  });
+  t.chair = roomTex(256, 320, (g, w, h) => {     // the back of a modern recliner (seen from behind)
+    g.clearRect(0, 0, w, h);
+    const body = g.createLinearGradient(0, 0, 0, h); body.addColorStop(0, "#2a2f3b"); body.addColorStop(1, "#141720");
+    g.fillStyle = body; rr(g, 18, 20, w - 36, h - 30, 46); g.fill();
+    g.fillStyle = "#3a4152"; rr(g, 60, 20, w - 120, 70, 30); g.fill();             // headrest
+    g.strokeStyle = "rgba(170,190,230,.35)"; g.lineWidth = 5; rr(g, 18, 20, w - 36, h - 30, 46); g.stroke();
+  });
+  t.tuft = roomTex(256, 160, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    for (let k = 0; k < 40; k++) {
+      const x = 30 + rnd(k) * (w - 60), l = 50 + rnd(k + 1) * 100, lean = (rnd(k + 2) - 0.5) * 60;
+      g.strokeStyle = `rgb(${30 + rnd(k + 3) * 40},${90 + rnd(k + 4) * 100},${35 + rnd(k + 5) * 30})`; g.lineWidth = 5;
+      g.beginPath(); g.moveTo(x, h); g.quadraticCurveTo(x + lean * 0.3, h - l * 0.6, x + lean, h - l); g.stroke();
+    }
+  });
+  theater.tex = t;
+  return t;
+}
+const floorY = (z) => -ROOM.eye + ROOM.slope * z;   // the floor steps down towards the screen
+function drawRoom(VP) {
+  const t = theaterTextures(), a = theater.a, tn = theater.tint;
+  const C = cinemaParams(screenAspect(state.proj) || 16 / 9);
+  const d = C.d, front = -(d + 0.6), back = ROOM.back;
+  const edge = d * Math.sin(Math.min(Math.PI * 0.47, C.w / C.d / 2));
+  const half = Math.max(5.5, edge + 1.4), zc = (front + back) / 2, len = back - front;
+  const yFront = floorY(front);
+  gl.uniformMatrix4fv(U.uVP, false, VP);
+  gl.uniform1i(U.uGeo, 0); gl.uniform1i(U.uProj, 0); gl.uniform1i(U.uSharp, 0);
+  gl.uniform3f(U.uTint, tn[0], tn[1], tn[2]);
+  const tex = (T, uvx, uvy) => { bindTex(T); gl.uniform1i(U.uMode, 0); gl.uniform1f(U.uAlpha, a); gl.uniform4f(U.uUVT, uvx, 0, uvy, 0); };
+  // ceiling (stars) and the two side walls
+  tex(t.stars, half / 4, len / 4);
+  drawMesh(QUAD, modelRS(rotX(90 * deg), [half, len / 2, 1], [0, ROOM.ceil, zc]));
+  const wallH = ROOM.ceil - yFront, wallY = (ROOM.ceil + yFront) / 2;
+  tex(t.wall, len / 2.5, wallH / 2.5);
+  drawMesh(QUAD, modelRS(rotY(90 * deg), [len / 2, wallH / 2, 1], [-half, wallY, zc]));
+  drawMesh(QUAD, modelRS(rotY(-90 * deg), [len / 2, wallH / 2, 1], [half, wallY, zc]));
+  // front and back walls: near black
+  gl.uniform4f(U.uUVT, 1, 0, 1, 0);
+  gl.uniform1i(U.uMode, 1); gl.uniform1f(U.uAlpha, a);
+  gl.uniform4f(U.uColor, 0.02 * tn[0], 0.022 * tn[1], 0.03 * tn[2], 1);
+  drawMesh(QUAD, modelRS(I3, [half, wallH / 2, 1], [0, wallY, front]));
+  drawMesh(QUAD, modelRS(rotY(Math.PI), [half, (ROOM.ceil - floorY(back)) / 2, 1], [0, (ROOM.ceil + floorY(back)) / 2, back]));
+  // floor (sloping down to the screen)
+  const al = Math.atan(ROOM.slope), flen = len * Math.hypot(1, ROOM.slope);
+  tex(theater.seat === "grass" ? t.grass : theater.seat === "chairs" ? t.carpet : t.floor, half / 1.5, flen / 1.5);
+  drawMesh(QUAD, modelRS(rotX(-90 * deg - al), [half, flen / 2, 1], [0, floorY(zc), zc]));
+  gl.uniform4f(U.uUVT, 1, 0, 1, 0);
+  gl.uniform3f(U.uTint, 1, 1, 1);
+}
+// seats: rows ahead (we sit in the last one), drawn after the screen (they are in front of it); grass: tufts
+function drawSeats(VP) {
+  if (theater.seat === "empty") return;
+  const t = theaterTextures(), a = theater.a, tn = theater.tint;
+  const C = cinemaParams(screenAspect(state.proj) || 16 / 9);
+  const d = C.d, front = -(d + 0.6);
+  const edge = d * Math.sin(Math.min(Math.PI * 0.47, C.w / C.d / 2));
+  const half = Math.max(5.5, edge + 1.4);
+  gl.uniformMatrix4fv(U.uVP, false, VP);
+  gl.uniform1i(U.uGeo, 0); gl.uniform1i(U.uProj, 0); gl.uniform1i(U.uSharp, 0);
+  gl.uniform4f(U.uUVT, 1, 0, 1, 0);
+  gl.uniform3f(U.uTint, tn[0], tn[1], tn[2]);
+  if (theater.seat === "chairs") {
+    bindTex(t.chair); gl.uniform1i(U.uMode, 0); gl.uniform1f(U.uAlpha, a);
+    for (let z = front + 1.3 + ((-1.5 - (front + 1.3)) % 1.2 + 1.2) % 1.2; z <= -1.45; z += 1.2) {   // far rows first
+      const y = floorY(z) + 0.45;
+      for (let x = -half + 0.7; x <= half - 0.7; x += 0.68) drawMesh(QUAD, modelRS(I3, [0.28, 0.43, 1], [x, y, z]));
+    }
+  } else if (theater.seat === "grass") {
+    bindTex(t.tuft); gl.uniform1i(U.uMode, 0); gl.uniform1f(U.uAlpha, a);
+    for (let k = 0; k < 70; k++) {
+      const z = front + 0.8 + rnd(k + 400) * (-0.9 - front - 0.8), x = (rnd(k + 500) - 0.5) * 2 * (half - 0.4);
+      drawMesh(QUAD, modelRS(I3, [0.32, 0.2, 1], [x, floorY(z) + 0.18, z]));
+    }
+  }
+  gl.uniform3f(U.uTint, 1, 1, 1);
+}
+// the room's colour follows the screen: a few rows of the screen picture, averaged, 4 times a second
+function theaterSample(now) {
+  if (now - theater.sampledAt < 250) return;
+  theater.sampledAt = now;
+  const T = state.mode === "vr" ? videoTex : state.mode === "screen" ? screenTex() : null;
+  let col = [0.45, 0.48, 0.62];                  // nothing playing: a calm blue-grey
+  if (T && T.w > 8 && T.h > 8) {
+    try {
+      theater.fb = theater.fb || gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, theater.fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, T.tex, 0);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE) {
+        const w = Math.min(T.w, 2048), px = new Uint8Array(w * 4);
+        let r = 0, g2 = 0, b = 0, n = 0;
+        for (const f of [0.25, 0.5, 0.75]) {
+          gl.readPixels(0, Math.floor(T.h * f), w, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          for (let i = 0; i < w; i += 8) { r += px[i * 4]; g2 += px[i * 4 + 1]; b += px[i * 4 + 2]; n++; }
+        }
+        if (n) {
+          const k = 1 / (255 * n), lum = (r + g2 + b) * k / 3;
+          // dim screen = dark room; bright screen = the room lights up in its colours
+          const lift = 0.25 + 1.6 * lum;
+          col = [r * k, g2 * k, b * k].map((c) => clamp(0.18 + (c / Math.max(lum, 0.05)) * lift * 0.5, 0.15, 1.4));
+        }
+      }
+    } catch (_) {}
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+  theater.tintT = col;
+}
+// the screen while nothing plays (menu open)
+function theaterScreenDraw() {
+  if (theater.scr) return;
+  const U = theater.scr = uiCanvas(1280, 720), g = U.g;
+  const gr = g.createLinearGradient(0, 0, 0, 720); gr.addColorStop(0, "#0c1220"); gr.addColorStop(1, "#05070d");
+  g.fillStyle = gr; g.fillRect(0, 0, 1280, 720);
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillStyle = "#f2f5fa"; g.font = `700 110px ${FONT}`; g.fillText("Theater", 640, 300);
+  g.fillStyle = "#8a96ad"; g.font = `500 44px ${FONT}`; g.fillText("Now showing: pick something to watch", 640, 420);
+  uploadTex(U.T, U.c, 1280, 720);
+}
+// the menu card: seating, room for all videos, watch from the Gallery
+const THEATER_ROWS = 3;
+function theaterMenuDraw() {
+  const U = theater.ui || (theater.ui = uiCanvas(1024, 520)), g = U.g;
+  const key = [theater.seat, theater.forAll, theater.hi].join("|");
+  if (U.key === key) return;
+  U.key = key;
+  g.fillStyle = "#0b0e16"; g.fillRect(0, 0, 1024, 520);
+  g.strokeStyle = "#2b3b5c"; g.lineWidth = 6; g.strokeRect(3, 3, 1018, 514);
+  g.textBaseline = "middle"; g.textAlign = "left"; g.fillStyle = "#f2f5fa"; g.font = `700 52px ${FONT}`;
+  g.fillText("Theater", 40, 62);
+  const rows = [["Seating", "◀ " + SEAT_NAMES[theater.seat] + " ▶"], ["Room for all videos", theater.forAll ? "◀ On ▶" : "◀ Off ▶"],
+                ["Watch from the Gallery", "A ▶"]];
+  rows.forEach(([l, v], i) => {
+    const y = 160 + i * 110, on = theater.hi === i;
+    g.fillStyle = on ? "#1d2a44" : "#121826"; rr(g, 24, y - 46, 976, 92, 18); g.fill();
+    if (on) { g.strokeStyle = "#2f81f7"; g.lineWidth = 5; g.stroke(); }
+    g.textAlign = "left"; g.fillStyle = "#dfe6f2"; g.font = `600 42px ${FONT}`; g.fillText(l, 56, y);
+    g.textAlign = "right"; g.fillStyle = "#ffd23a"; g.fillText(v, 968, y);
+  });
+  g.textAlign = "left"; g.fillStyle = "#8a96ad"; g.font = `500 30px ${FONT}`;
+  g.fillText("d-pad: choose / change   R3 = screen distance & size   B = close", 40, 488);
+  uploadTex(U.T, U.c, 1024, 520);
+}
+function theaterMenuQuad() { return quadAt(theater.yaw, -16 * deg, 1.7, 1.0, 0.508); }
+function theaterOpen() {
+  if (state.mode === "vr" || state.mode === "screen") exitVr();
+  if (gal.open) galHide();
+  theater.menu = true; theater.hi = 0;
+  theater.yaw = headYawOf(currentRotation());
+  hudShow({title: "Theater", text: "Seating: chairs, grass or empty.  B = close"}, 2500);
+}
+function theaterButton(b) {
+  if (b === 11 || b === 12) theater.hi = clamp(theater.hi + (b === 12 ? 1 : -1), 0, THEATER_ROWS - 1);
+  else if (b === 13 || b === 14 || (b === 0 && theater.hi < 2)) {
+    const d = b === 13 ? -1 : 1;
+    if (theater.hi === 0) theater.seat = SEATS[(SEATS.indexOf(theater.seat) + d + SEATS.length) % SEATS.length];
+    else if (theater.hi === 1) theater.forAll = !theater.forAll;
+    theaterSave();
+  } else if (b === 0 && theater.hi === 2) { theater.menu = false; galShow(); }
+  else if (b === 1) { theater.menu = false; launcherToggle(true); }   // B = back Home
 }
 
 // ── Lens settings card (View button): drawn in 3D, so each eye sees it; it follows the head, so it stays in
@@ -3390,9 +3779,21 @@ function drawEye(R, eye, eyeOffset, x, y, w, h, fovy, shiftX, now) {
     gl.uniform1f(U.uPt, Math.max(1, h / 720));            // h is in device pixels already
     drawMesh(STARS, IDENT);
   }
+  // theater room (T1): around the big screen
+  if (theater.a > 0.002) {
+    drawRoom(VP);
+    if (theater.menu && state.mode === "browser") {           // the screen while nothing plays (seats: below)
+      theaterScreenDraw();
+      const C = cinemaParams(16 / 9);
+      bindTex(theater.scr.T); gl.uniform1i(U.uMode, 0); gl.uniform1f(U.uAlpha, theater.a);
+      gl.uniformMatrix4fv(U.uVP, false, VP);
+      drawMesh(QUAD, modelRS(I3, [C.d * Math.sin(Math.min(1.4, C.w / C.d / 2)), C.h / 2, 1], [0, C.y, -C.d * 0.98]));
+    }
+  }
   // video
   if (state.videoA > 0.002 && (videoHasFrame || demoVideoSrc)) drawVideo(eye, VP, VProt);
   gl.uniformMatrix4fv(U.uVP, false, VP);
+  const seatsLate = theater.a > 0.002;           // drawn after the page / video screen (they are in front of it)
   // browser panel (or the live page on the cinema screen)
   const P = panelParams();
   if (state.panelA > 0.002) {
@@ -3400,7 +3801,7 @@ function drawEye(R, eye, eyeOffset, x, y, w, h, fovy, shiftX, now) {
     gl.uniform1i(U.uMode, 1); gl.uniform4f(U.uColor, 0.13, 0.15, 0.2, 1);           // bezel
     const b = 0.025 + 0.03 * ease(state.cinemaT);
     setScreen({d: P.d + 0.004, w: P.w + 2 * b, h: P.h + 2 * b, k: P.k, y: P.y}); drawMesh(GRID, IDENT);
-    bindTex(panelTex); gl.uniform1i(U.uMode, 0); gl.uniform1i(U.uSharp, SHARP ? 1 : 0);
+    bindTex(screenTex()); gl.uniform1i(U.uMode, 0); gl.uniform1i(U.uSharp, SHARP ? 1 : 0);
     setScreen(P); drawMesh(GRID, IDENT);
     gl.uniform1i(U.uGeo, 0); gl.uniform1i(U.uSharp, 0);
     if (state.info.loading && state.cinemaT < 0.01) {                               // page loading strip
@@ -3409,10 +3810,23 @@ function drawEye(R, eye, eyeOffset, x, y, w, h, fovy, shiftX, now) {
       drawMesh(QUAD, modelRS(I3, [P.w / 2, 0.006, 1], [0, P.y + P.h / 2 + 0.02, -P.d]));
     }
   }
+  if (seatsLate) drawSeats(VP);
   // tab strip + address bar
   if (chromeVisible()) drawUiQuad(chromeUi.T, chromeQuad(), state.panelA);
   // VR player bar
   if (vr && bar.a > 0.002) drawUiQuad(barUi.T, barQuad(), bar.a);
+  // gallery grid / Home (planets, tree, orbit) — under the HUD card
+  if (gal.a > 0 && gal.ui) drawUiQuad(gal.ui.T, galQuad(), gal.a);
+  if (launcher.a > 0 && homeTheme === "tree") drawUiQuad(treeUi.T, treeQuad(), launcher.a * 0.95);
+  if (launcher.a > 0 && homeTheme === "orbit") {  // the orbit: small rings along the circle the apps travel on
+    gl.uniform1i(U.uMode, 2); gl.uniform1i(U.uProj, 0); gl.uniform1i(U.uGeo, 0);
+    gl.uniform1f(U.uAlpha, launcher.a * 0.6); gl.uniform4f(U.uColor, 0.45, 0.65, 1, 1);
+    for (let k = 0; k < 72; k++) {
+      const yaw = launcher.yaw + launcher.spin + k * 2 * Math.PI / 72, M = mul3(rotY(yaw), rotX(-4 * deg));
+      drawMesh(QUAD, modelRS(M, [0.018, 0.018, 1], mv3(M, [0, -0.33, -ORBIT_R])));
+    }
+  }
+  if (launcher.a > 0) for (let i = 0; i < APPS.length; i++) drawUiQuad(launcher.ui[i].T, planetQuad(i), launcher.a);
   // HUD card
   if (hud3.a > 0.002) {
     bindTex(hudTex); gl.uniform1i(U.uMode, 0); gl.uniform1f(U.uAlpha, hud3.a);
@@ -3422,8 +3836,7 @@ function drawEye(R, eye, eyeOffset, x, y, w, h, fovy, shiftX, now) {
   }
   // keyboard (on top of everything but the ring)
   if (kb.open) drawUiQuad(kbUi.T, kbQuad(), 1);
-  if (gal.a > 0 && gal.ui) drawUiQuad(gal.ui.T, galQuad(), gal.a);
-  if (launcher.a > 0) for (let i = 0; i < APPS.length; i++) drawUiQuad(launcher.ui[i].T, planetQuad(i), launcher.a);
+  if (theater.menu) drawUiQuad(theater.ui.T, theaterMenuQuad(), theater.a);
   if (lensCardOpen()) drawUiQuad(lensUi.T, lensQuad(), 1);
   // pointer ring
   if (state.ptrHit && (state.ptrTarget !== "page" || state.panelA > 0.5)) {
@@ -3456,7 +3869,7 @@ function frame(t) {
   // fades: panel out / video in once the first video frame is up; panel -> cinema in "screen" mode
   const showVideo = state.mode === "vr" && (videoHasFrame || !!demoVideoSrc);
   state.videoA = approach(state.videoA, showVideo ? 1 : 0, dt, 0.25);
-  state.panelA = approach(state.panelA, showVideo || launcher.open || gal.open ? 0 : 1, dt, 0.2);   // home: the browser fades away
+  state.panelA = approach(state.panelA, showVideo || launcher.open || gal.open || theater.menu ? 0 : 1, dt, 0.2);   // home: the browser fades away
   state.cinemaT = approach(state.cinemaT, state.mode === "screen" ? 1 : 0, dt, 0.3);
   if (state.panelA > 0.995) state.panelA = 1; if (state.panelA < 0.003) state.panelA = 0;
   if (state.videoA > 0.995) state.videoA = 1; if (state.videoA < 0.003) state.videoA = 0;
@@ -3465,6 +3878,12 @@ function frame(t) {
   bar.a = approach(bar.a, barVisible() ? 1 : 0, dt, 0.05);
   launcher.a = approach(launcher.a, launcher.open ? 1 : 0, dt, 0.08);
   gal.a = approach(gal.a, gal.open ? 1 : 0, dt, 0.08);
+  theater.a = approach(theater.a, theaterWanted() ? 1 : 0, dt, 0.35);
+  if (theater.a < 0.003) theater.a = 0;
+  if (theater.a > 0) {
+    theaterSample(now);
+    for (let i = 0; i < 3; i++) theater.tint[i] = approach(theater.tint[i], theater.tintT[i], dt, 0.4);
+  }
   gal.scroll = Math.abs(gal.scrollT - gal.scroll) < 0.002 ? gal.scrollT : approach(gal.scroll, gal.scrollT, dt, 0.06);
   if (gal.a < 0.003) gal.a = 0;
   if (launcher.a < 0.003) launcher.a = 0;
@@ -3478,7 +3897,9 @@ function frame(t) {
   badgeWatch(now);
   if (chromeVisible()) chromeDraw(now);
   if (lensCardOpen()) lensDraw();
+  if (theater.menu) theaterMenuDraw();
   if (launcher.a > 0) for (let i = 0; i < APPS.length; i++) planetDraw(i);
+  if (launcher.a > 0 && homeTheme === "tree") treeDraw();
   if (gal.a > 0) galDraw();
   if (state.mode === "vr" && bar.a > 0.002) barDraw(now);
   if (kb.open) kbDraw(now);
